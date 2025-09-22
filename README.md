@@ -102,7 +102,7 @@ Uploads live in `./uploads`, which ships empty apart from a `.gitkeep` so you ca
 
 ## GitHub Actions (GHCR Release)
 
-`.github/workflows/manual-build.yml` defines a manual workflow that builds the Docker image and pushes it to GitHub Container Registry. When you trigger the workflow from the Actions tab you will be prompted for a tag (for example `v1.0.0`). The workflow publishes two tags:
+`.github/workflows/manual-build.yml` defines a manual workflow that builds the Docker image and pushes it to GitHub Container Registry. Trigger it from the Actions tab and supply a tag (for example `v1.0.0`). If you leave the tag blank, the workflow falls back to the commit SHA. The workflow publishes two tags:
 
 ```
 ghcr.io/<owner>/<repo>:<tag>
