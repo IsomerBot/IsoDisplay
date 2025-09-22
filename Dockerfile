@@ -32,6 +32,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/isodisplay?schema=public
 ENV NEXTAUTH_SECRET=placeholder-build-secret-that-is-long-enough-1234
+ENV NEXTAUTH_URL=https://example.com
 RUN npm run build
 
 # Production image, copy all the files and run next
