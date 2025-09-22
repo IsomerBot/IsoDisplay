@@ -80,7 +80,7 @@ export const rateLimitConfigs = {
   },
   api: {
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 100 // 100 requests per window
+    max: 1000 // Allow more requests per minute for interactive dashboards
   },
   upload: {
     windowMs: 5 * 60 * 1000, // 5 minutes
@@ -94,6 +94,7 @@ export function getClientIdentifier(request: NextRequest): string {
   const forwardedFor = request.headers.get('x-forwarded-for');
   const realIp = request.headers.get('x-real-ip');
   const cfConnectingIp = request.headers.get('cf-connecting-ip');
+  const requestIp = (request as any).ip as string | undefined;
   
   if (forwardedFor) {
     return forwardedFor.split(',')[0].trim();
@@ -104,9 +105,13 @@ export function getClientIdentifier(request: NextRequest): string {
   if (cfConnectingIp) {
     return cfConnectingIp;
   }
+  if (requestIp) {
+    return requestIp;
+  }
   
   // Fallback to a generic identifier
-  return 'unknown-client';
+  const userAgent = request.headers.get('user-agent') ?? 'unknown-agent';
+  return `unknown-client-${userAgent}`;
 }
 
 // Main rate limiting function
