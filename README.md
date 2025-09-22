@@ -23,16 +23,11 @@ IsoDisplay is a Docker-first digital signage platform. Upload media, arrange pla
 
 2. **Launch the stack**
 
-   Edit `docker-compose.yml` so the `app` service points at the image published to GHCR (for example `ghcr.io/your-org/isodisplay:v1.0.0`). Then start the services:
+   Edit `docker-compose.yml` so the `app` service points at the image published to GHCR (for example `ghcr.io/your-org/isodisplay:v1.0.0`). Then start the services and run migrations/seed:
 
    ```bash
    docker compose pull
    docker compose up -d
-   ```
-
-   Once running, apply migrations and seed the admin user:
-
-   ```bash
    docker compose exec app npx prisma migrate deploy
    docker compose exec app npx prisma db seed
    ```
@@ -83,7 +78,7 @@ networks:
     driver: bridge
 ```
 
-Replace `<owner>/<repo>:<tag>` with the tag produced by the release workflow, then run `docker compose pull` before `docker compose up -d`.
+Replace `<owner>/<repo>:<tag>` with the tag produced by the release workflow. When running in Portainer, set the same variables on the stack’s **Environment** tab so the placeholders resolve correctly.
 
 ## Environment Variables
 
@@ -113,7 +108,6 @@ To deploy using the published image:
 
 ```bash
 docker login ghcr.io -u <owner> --password-stdin <<< "$GH_TOKEN"
-# update compose to use the published image
 docker compose pull
 docker compose up -d
 ```
