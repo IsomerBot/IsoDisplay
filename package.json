@@ -11,7 +11,7 @@
     "test": "echo 'No tests configured yet'",
     "prepare": "husky",
     "regenerate-thumbnails": "tsx scripts/regenerate-display-thumbnails.ts",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "node prisma/seed.js",
     "db:reset": "npx prisma migrate reset --force",
     "db:migrate": "prisma migrate deploy",
     "postinstall": "prisma generate"
@@ -105,6 +105,6 @@
     ]
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "node prisma/seed.js"
   }
 }

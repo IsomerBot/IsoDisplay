@@ -1,5 +1,5 @@
-import { PrismaClient } from '../src/generated/prisma';
-import bcrypt from 'bcryptjs';
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
@@ -12,7 +12,7 @@ async function main() {
 
   if (!adminEmail || !adminUsername || !adminPassword) {
     console.warn('⚠️  Skipping admin creation because ADMIN_EMAIL, ADMIN_USERNAME, or ADMIN_PASSWORD is not set.');
-    console.warn('    Provide these variables and re-run `npx prisma db seed` to create the initial admin user.');
+    console.warn('    Provide these variables and re-run "npx prisma db seed" to create the initial admin user.');
     return;
   }
 
