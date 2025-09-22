@@ -397,17 +397,14 @@ export async function generateDisplayThumbnail(
     
     if (imageScale === 'cover') {
       // Cover: scale image to cover entire canvas, crop if necessary
-      const scale = Math.max(640 / inputWidth, 360 / inputHeight);
-      const scaledWidth = Math.round(inputWidth * scale);
-      const scaledHeight = Math.round(inputHeight * scale);
-      
       resizedImage = await sharp(inputPath)
-        .resize(scaledWidth, scaledHeight, {
-          fit: 'fill'
+        .resize(640, 360, {
+          fit: 'cover',
+          position: 'center'
         })
         .toBuffer();
     } else if (imageScale === 'fill') {
-      // Fill: stretch image to fill entire canvas
+      // Fill: stretch image to fill entire canvas (may distort aspect ratio)
       resizedImage = await sharp(inputPath)
         .resize(640, 360, {
           fit: 'fill'
