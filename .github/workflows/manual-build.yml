@@ -2,11 +2,6 @@ name: Manual Release
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Container tag to publish (e.g. v1.0.0)'
-        required: true
-        type: string
 
 jobs:
   build-and-push:
