@@ -106,21 +106,32 @@ export function ImageRenderer({ item, onError }: ImageRendererProps) {
 
   // Use backgroundColor from content or item, fallback to black
   const backgroundColor = item.content?.backgroundColor || item.backgroundColor || item.cropSettings?.backgroundColor || '#000000';
-  
-  // Get image size from metadata (default 100%)
+
+  // Get image scale mode and size from metadata
+  const imageScale = item.content?.metadata?.imageScale || item.imageScale || 'contain';
   const imageSize = item.content?.metadata?.imageSize || 100;
-  
+
+  // Determine object-fit based on imageScale
+  let objectFit: 'contain' | 'cover' | 'fill';
+  if (imageScale === 'cover') {
+    objectFit = 'cover';
+  } else if (imageScale === 'fill') {
+    objectFit = 'fill';
+  } else {
+    objectFit = 'contain';
+  }
+
   // Calculate the actual dimensions for proper scaling
-  const scalingStyle = imageSize === 100 ? {
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain' as const
-  } : {
+  const scalingStyle = imageScale === 'contain' && imageSize !== 100 ? {
     width: 'auto',
     height: 'auto',
     maxWidth: `${imageSize}%`,
     maxHeight: `${imageSize}%`,
-    objectFit: 'contain' as const
+    objectFit: objectFit
+  } : {
+    width: '100%',
+    height: '100%',
+    objectFit: objectFit
   };
 
   // Show fallback content for persistent errors
@@ -142,7 +153,9 @@ export function ImageRenderer({ item, onError }: ImageRendererProps) {
     retryCount,
     isRetrying,
     backgroundColor,
+    imageScale,
     imageSize,
+    objectFit,
     scalingStyle,
     contentMetadata: item.content?.metadata,
     contentBgColor: item.content?.backgroundColor,

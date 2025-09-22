@@ -478,6 +478,17 @@ export function databaseToApiContent(dbContent: any): ApiContentResponse {
     thumbnailUrl = dbContent.filePath;
   }
 
+  // Add cache busting parameter based on content or thumbnail update time
+  let thumbnailUrlWithCacheBust = thumbnailUrl;
+  if (thumbnailUrl && !thumbnailUrl.startsWith('http')) {
+    // Find the display thumbnail's updatedAt time if available
+    const displayThumb = dbContent.thumbnails?.find((t: any) => t.size === 'display');
+    const updateTime = displayThumb?.updatedAt || dbContent.updatedAt;
+    const timestamp = updateTime ? new Date(updateTime).getTime() : Date.now();
+    const separator = thumbnailUrl.includes('?') ? '&' : '?';
+    thumbnailUrlWithCacheBust = `${thumbnailUrl}${separator}t=${timestamp}`;
+  }
+
   return {
     id: dbContent.id,
     name: dbContent.name,
@@ -501,7 +512,7 @@ export function databaseToApiContent(dbContent: any): ApiContentResponse {
     createdAt: dbContent.createdAt.toISOString(),
     updatedAt: dbContent.updatedAt.toISOString(),
     deletedAt: dbContent.deletedAt?.toISOString() || null,
-    thumbnailUrl: thumbnailUrl,
+    thumbnailUrl: thumbnailUrlWithCacheBust,
     thumbnails: dbContent.thumbnails?.map((t: any) => ({
       id: t.id,
       contentId: t.contentId,

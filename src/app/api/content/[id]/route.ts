@@ -5,6 +5,11 @@ import { databaseToApiContent } from '@/lib/transformers/api-transformers';
 import { validateUpdateContent, type UpdateContentInput } from '@/lib/validators/content-schemas';
 import { validationErrorResponse, ErrorResponses, isValidUUID } from '@/lib/validators/api-validators';
 import { promises as fs } from 'fs';
+import { generateDisplayThumbnail } from '@/lib/upload/image-processor';
+import { generatePdfThumbnail } from '@/lib/upload/document-processor';
+import { ContentType } from '@/generated/prisma';
+import path from 'path';
+import { resolveUploadsPath } from '@/lib/upload/path-utils';
 
 
 // GET individual content item
@@ -100,8 +105,111 @@ export async function PUT(
       },
     });
 
+    // Regenerate display thumbnail if image or PDF properties changed
+    const shouldRegenerateThumbnail =
+      (existingContent.type === ContentType.IMAGE &&
+       (validatedData.backgroundColor !== undefined ||
+        validatedData.metadata?.imageScale !== undefined ||
+        validatedData.metadata?.imageSize !== undefined)) ||
+      (existingContent.type === ContentType.PDF &&
+       (validatedData.backgroundColor !== undefined ||
+        validatedData.metadata?.pdfScale !== undefined ||
+        validatedData.metadata?.pdfSize !== undefined));
+
+    if (shouldRegenerateThumbnail) {
+      try {
+        console.log('Regenerating thumbnail for content:', id);
+
+        // Find existing display thumbnail
+        const displayThumbnail = updatedContent.thumbnails.find(t => t.size === 'display');
+
+        if (displayThumbnail && existingContent.filePath) {
+          // Determine the output path for the thumbnail
+          let outputPath: string;
+
+          // If the existing thumbnail is a local file, use the same path
+          if (displayThumbnail.filePath && !displayThumbnail.filePath.startsWith('http')) {
+            outputPath = displayThumbnail.filePath;
+          } else {
+            // Generate a new path for the thumbnail
+            const uploadsDir = resolveUploadsPath('images');
+            const filename = `${id}-display-${Date.now()}.jpg`;
+            outputPath = path.join(uploadsDir, filename);
+
+            // Ensure directory exists
+            await fs.mkdir(uploadsDir, { recursive: true });
+          }
+
+          // Generate new thumbnail with updated properties
+          const metadata = updatedContent.metadata as any || {};
+
+          if (existingContent.type === ContentType.IMAGE) {
+            // For images, use generateDisplayThumbnail with scale settings
+            await generateDisplayThumbnail(
+              existingContent.filePath,
+              outputPath,
+              updatedContent.backgroundColor || '#000000',
+              metadata.imageScale || 'contain',
+              metadata.imageSize || 100
+            );
+          } else if (existingContent.type === ContentType.PDF) {
+            // For PDFs, first generate a basic thumbnail from the first page
+            const tempThumbPath = outputPath.replace('.jpg', '-temp.jpg');
+            await generatePdfThumbnail(existingContent.filePath, tempThumbPath, {
+              page: 1,
+              width: 1920,
+              height: 1080,
+            });
+
+            // Then apply the display settings to the thumbnail
+            await generateDisplayThumbnail(
+              tempThumbPath,
+              outputPath,
+              updatedContent.backgroundColor || '#000000',
+              metadata.pdfScale || 'contain',
+              metadata.pdfSize || 100
+            );
+
+            // Clean up temp file
+            try {
+              await fs.unlink(tempThumbPath);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+          }
+
+          console.log('Thumbnail regenerated at:', outputPath);
+
+          // Always update thumbnail record to trigger cache invalidation
+          // Get file size
+          const stats = await fs.stat(outputPath);
+
+          await prisma.fileThumbnail.update({
+            where: { id: displayThumbnail.id },
+            data: {
+              filePath: outputPath,
+              fileSize: BigInt(stats.size),
+              // Update the updatedAt timestamp to help with cache invalidation
+              updatedAt: new Date(),
+            },
+          });
+        }
+      } catch (error) {
+        console.error('Failed to regenerate thumbnail:', error);
+        // Don't fail the entire update if thumbnail regeneration fails
+      }
+    }
+
+    // Re-fetch content with updated thumbnail info
+    const finalContent = await prisma.content.findUnique({
+      where: { id },
+      include: {
+        thumbnails: true,
+      },
+    });
+
     // Transform database response to API format
-    const apiResponse = databaseToApiContent(updatedContent);
+    const apiResponse = databaseToApiContent(finalContent || updatedContent);
 
     return NextResponse.json(apiResponse);
   } catch (error) {

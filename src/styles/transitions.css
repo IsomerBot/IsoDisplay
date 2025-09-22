@@ -1,17 +1,21 @@
-/* Fade Transition */
+/* Fade Transition - Optimized for Raspberry Pi */
 .transition-fade-enter {
   opacity: 0;
+  transform: translateZ(0); /* Force GPU acceleration */
 }
 .transition-fade-enter-active {
   opacity: 1;
-  transition: opacity var(--transition-duration, 1s) ease-in-out;
+  transform: translateZ(0);
+  transition: opacity var(--transition-duration, 1s) linear; /* Linear for smoother performance */
 }
 .transition-fade-exit {
   opacity: 1;
+  transform: translateZ(0);
 }
 .transition-fade-exit-active {
   opacity: 0;
-  transition: opacity var(--transition-duration, 1s) ease-in-out;
+  transform: translateZ(0);
+  transition: opacity var(--transition-duration, 1s) linear;
 }
 
 /* Crossfade (similar to fade but overlapping) */
@@ -46,24 +50,25 @@
   opacity: 0;
 }
 
-/* Dissolve */
+/* Dissolve - Simplified for performance */
 .transition-dissolve-enter {
   opacity: 0;
-  filter: blur(10px);
+  transform: translateZ(0);
+  /* Blur disabled for Pi performance */
 }
 .transition-dissolve-enter-active {
   opacity: 1;
-  filter: blur(0);
-  transition: all var(--transition-duration, 1s) ease-in-out;
+  transform: translateZ(0);
+  transition: opacity var(--transition-duration, 1s) linear;
 }
 .transition-dissolve-exit {
   opacity: 1;
-  filter: blur(0);
+  transform: translateZ(0);
 }
 .transition-dissolve-exit-active {
   opacity: 0;
-  filter: blur(10px);
-  transition: all var(--transition-duration, 1s) ease-in-out;
+  transform: translateZ(0);
+  transition: opacity var(--transition-duration, 1s) linear;
 }
 
 /* Wipe (left to right) */
@@ -175,20 +180,24 @@
   transition: all var(--transition-duration, 1s) cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
-/* Burn */
+/* Burn - Disabled filters for performance */
 .transition-burn-enter {
-  filter: brightness(0) contrast(100);
+  opacity: 0;
+  transform: translateZ(0);
 }
 .transition-burn-enter-active {
-  filter: brightness(1) contrast(1);
-  transition: filter var(--transition-duration, 1s) ease-in-out;
+  opacity: 1;
+  transform: translateZ(0);
+  transition: opacity var(--transition-duration, 1s) linear;
 }
 .transition-burn-exit {
-  filter: brightness(1) contrast(1);
+  opacity: 1;
+  transform: translateZ(0);
 }
 .transition-burn-exit-active {
-  filter: brightness(2) contrast(100);
-  transition: filter var(--transition-duration, 1s) ease-in-out;
+  opacity: 0;
+  transform: translateZ(0);
+  transition: opacity var(--transition-duration, 1s) linear;
 }
 
 /* Barn Doors */
@@ -303,6 +312,43 @@
 }
 .transition-slide-over-enter-active {
   transform: translate3d(0, 0, 0);
+}
+
+/* Raspberry Pi Specific Optimizations */
+@media (prefers-reduced-motion: reduce), (max-width: 99999px) {
+  /* Simplify all transitions to just opacity for low-powered devices */
+  [class*="transition-"][class*="-enter"],
+  [class*="transition-"][class*="-enter-active"],
+  [class*="transition-"][class*="-exit"],
+  [class*="transition-"][class*="-exit-active"] {
+    filter: none !important;
+    clip-path: none !important;
+    transform: translateZ(0) !important;
+  }
+
+  /* Override complex transitions with simple fade */
+  .transition-dissolve-enter,
+  .transition-burn-enter,
+  .transition-morph-enter,
+  .transition-zoom-enter,
+  .transition-iris-enter,
+  .transition-peel-enter,
+  .transition-page-roll-enter {
+    opacity: 0 !important;
+    transform: translateZ(0) !important;
+  }
+
+  .transition-dissolve-enter-active,
+  .transition-burn-enter-active,
+  .transition-morph-enter-active,
+  .transition-zoom-enter-active,
+  .transition-iris-enter-active,
+  .transition-peel-enter-active,
+  .transition-page-roll-enter-active {
+    opacity: 1 !important;
+    transform: translateZ(0) !important;
+    transition: opacity var(--transition-duration, 1s) linear !important;
+  }
 }
 
 /* Hardware acceleration optimization */
