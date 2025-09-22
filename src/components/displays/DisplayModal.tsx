@@ -12,6 +12,7 @@ import { Display, CreateDisplayInput, UpdateDisplayInput, RESOLUTION_OPTIONS } f
 import { ClockSettings, ClockConfig } from './ClockSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
+import { useCSRF } from '@/hooks/useCSRF';
 
 interface DisplayModalProps {
   display: Display | null;
@@ -22,6 +23,7 @@ interface DisplayModalProps {
 
 export function DisplayModal({ display, isOpen, onClose, onSave }: DisplayModalProps) {
   const { showToast } = useToast();
+  const { secureFetch } = useCSRF();
   const [formData, setFormData] = useState<CreateDisplayInput>({
     name: '',
     location: '',
@@ -145,12 +147,8 @@ export function DisplayModal({ display, isOpen, onClose, onSave }: DisplayModalP
         clockSettings: clockSettings,
       };
 
-      const response = await fetch(url, {
+      const response = await secureFetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'same-origin',
         body: JSON.stringify(body),
       });
 

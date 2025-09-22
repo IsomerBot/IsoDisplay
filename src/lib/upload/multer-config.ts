@@ -3,6 +3,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import crypto from 'crypto';
 import { env } from '@/lib/env';
+import { getUploadsBasePath } from './path-utils';
 
 // Allowed file types and their MIME types
 export const ALLOWED_FILE_TYPES = {
@@ -56,10 +57,7 @@ function generateFileName(originalName: string): string {
 
 // Create upload directory structure
 export async function ensureUploadDirectory(subPath: string): Promise<string> {
-  // Use absolute path to avoid issues with Next.js working directories
-  const basePath = path.isAbsolute(env.FILE_STORAGE_PATH) 
-    ? env.FILE_STORAGE_PATH 
-    : '/Users/sronnie/Documents/Coding/IsoDisplay/uploads';
+  const basePath = getUploadsBasePath(env.FILE_STORAGE_PATH);
   const uploadPath = path.join(basePath, subPath);
   await fs.mkdir(uploadPath, { recursive: true });
   return uploadPath;

@@ -6,6 +6,7 @@ import { fetchYouTubeVideoInfoWithAPI } from '@/lib/youtube-api';
 import { generateDisplayThumbnailFromUrl } from '@/lib/upload/image-processor';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { resolveUploadsPath } from '@/lib/upload/path-utils';
 
 // IsoMerc channel details
 const CHANNEL_ID = 'UCvjfQYM3sfSwfAn0cu4wBMA'; // @isomerpg channel ID (verified 2025)
@@ -203,8 +204,7 @@ export async function POST(request: NextRequest) {
 
         // Generate a proper display thumbnail with correct letterboxing/pillarboxing
         const youtubeThumbnailUrl = videoInfo?.thumbnailUrl || video.thumbnailUrl || `https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`;
-        const projectRoot = process.cwd() === '/app' ? '/Users/sronnie/Documents/Coding/IsoDisplay' : process.cwd();
-        const youtubeThumbnailDir = path.join(projectRoot, 'uploads', 'youtube-thumbnails');
+        const youtubeThumbnailDir = resolveUploadsPath('youtube-thumbnails');
         await fs.mkdir(youtubeThumbnailDir, { recursive: true });
         
         const displayThumbFilename = `${video.videoId}-display-${Date.now()}.jpg`;

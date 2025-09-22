@@ -23,7 +23,7 @@ export interface PlaylistItem {
   transitionDuration: number; // in seconds
   title: string;
   thumbnail?: string;
-  contentType: 'image' | 'video' | 'pdf';
+  contentType: 'image' | 'video' | 'pdf' | 'youtube';
   cropSettings?: any; // Will be replaced with actual crop settings type
   backgroundColor?: string;
   imageScale?: 'contain' | 'cover' | 'fill';

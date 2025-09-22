@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Input } from '@/components/ui/input';
+import { useCSRF } from '@/hooks/useCSRF';
 
 const LoginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -15,11 +16,12 @@ const LoginSchema = z.object({
 
 type LoginFormData = z.infer<typeof LoginSchema>;
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { csrfToken, secureFetch } = useCSRF();
 
   const callbackUrl = searchParams.get('callbackUrl') || '/displays';
 
@@ -37,11 +39,8 @@ export default function LoginPage() {
 
     try {
       // Use custom auth endpoint instead of NextAuth
-      const response = await fetch('/api/auth/login', {
+      const response = await secureFetch('/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           email: data.email,
           password: data.password,
@@ -77,6 +76,12 @@ export default function LoginPage() {
             {error && (
               <div className="bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-lg">
                 {error}
+              </div>
+            )}
+
+            {!csrfToken && !error && (
+              <div className="bg-brand-blue-900/40 border border-brand-blue-200/50 text-brand-blue-200 px-4 py-3 rounded-lg">
+                Initialising security token...
               </div>
             )}
 
@@ -135,14 +140,28 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !csrfToken}
               className="w-full py-3 px-4 bg-brand-orange-500 hover:bg-brand-orange-600 text-white font-semibold rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? 'Signing in...' : (!csrfToken ? 'Preparing...' : 'Sign In')}
             </button>
           </form>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-brand-gray-900 px-4 py-12">
+          <div className="text-white/70">Loading...</div>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

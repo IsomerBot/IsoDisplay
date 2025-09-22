@@ -7,6 +7,7 @@ import { fetchYouTubeVideoInfoWithAPI } from '@/lib/youtube-api';
 import { generateDisplayThumbnailFromUrl } from '@/lib/upload/image-processor';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { resolveUploadsPath } from '@/lib/upload/path-utils';
 
 // Validation schema for YouTube content
 const YouTubeContentSchema = z.object({
@@ -147,8 +148,7 @@ export async function POST(request: NextRequest) {
 
     // Generate a proper display thumbnail with correct letterboxing/pillarboxing
     // Create a directory for YouTube thumbnails
-    const projectRoot = process.cwd() === '/app' ? '/Users/sronnie/Documents/Coding/IsoDisplay' : process.cwd();
-    const youtubeThumbnailDir = path.join(projectRoot, 'uploads', 'youtube-thumbnails');
+    const youtubeThumbnailDir = resolveUploadsPath('youtube-thumbnails');
     await fs.mkdir(youtubeThumbnailDir, { recursive: true });
     
     // Generate display thumbnail filename

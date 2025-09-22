@@ -17,6 +17,7 @@ export default function DisplayViewerPage() {
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [playerConnectionStatus, setPlayerConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   // Handle remote commands
   const handleRemoteCommand = useCallback((command: any) => {
     switch (command.action) {
@@ -38,8 +39,9 @@ export default function DisplayViewerPage() {
 
   // Initialize Socket.io connection
   // Always keep WebSocket connected even if display is null, so we can receive updates
-  const { isConnected } = useSocketConnection({
+  useSocketConnection({
     displayId: display?.id,
+    displaySlug: display?.uniqueUrl || uniqueUrl,
     onPlaylistUpdate: (updatedPlaylist) => {
       console.log('Received playlist update via WebSocket:', updatedPlaylist);
       // Clear any cached playlists first
@@ -49,9 +51,11 @@ export default function DisplayViewerPage() {
       // Update the playlist directly without reloading
       // Use setTimeout to ensure React has time to process the state change
       setTimeout(() => {
-        setPlaylist(updatedPlaylist);
-        setError(null);
-        setLoading(false);
+        if (updatedPlaylist !== undefined) {
+          setPlaylist(updatedPlaylist);
+          setError(null);
+          setLoading(false);
+        }
       }, 0);
     },
     onDisplayUpdate: (updatedDisplay) => {
@@ -111,20 +115,20 @@ export default function DisplayViewerPage() {
     enabled: true, // Always enabled to receive updates even when showing error/no-content
   });
 
+  const isDisplayConnected = playerConnectionStatus === 'connected';
+
   useEffect(() => {
-    if (uniqueUrl) {
-      // Initial fetch
-      fetchDisplay(false);
-      
-      // Polling disabled - using WebSocket for real-time updates
-      // const interval = setInterval(() => {
-      //   if (display) {  // Only poll if display is loaded
-      //     fetchDisplay(true);
-      //   }
-      // }, 5000);
-      
-      // return () => clearInterval(interval);
-    }
+    if (!uniqueUrl) return;
+
+    // Initial fetch
+    fetchDisplay(false);
+
+    // Safety net polling in case websocket updates fail
+    const interval = setInterval(() => {
+      fetchDisplay(true);
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [uniqueUrl]);
 
   const fetchDisplay = async (isPolling = false) => {
@@ -196,7 +200,7 @@ export default function DisplayViewerPage() {
         type="loading-error"
         message="Connecting to display server..."
         displayName={uniqueUrl}
-        isConnected={isConnected}
+        isConnected={isDisplayConnected}
       />
     );
   }
@@ -209,7 +213,7 @@ export default function DisplayViewerPage() {
         displayName={uniqueUrl}
         onRetry={fetchDisplay}
         showRetryButton={true}
-        isConnected={isConnected}
+        isConnected={isDisplayConnected}
       />
     );
   }
@@ -220,7 +224,7 @@ export default function DisplayViewerPage() {
         type="no-content"
         message="This display has no content assigned. Please assign a playlist from the admin interface."
         displayName={display?.name || uniqueUrl}
-        isConnected={isConnected}
+        isConnected={isDisplayConnected}
       />
     );
   }
@@ -235,19 +239,17 @@ export default function DisplayViewerPage() {
       }}
     >
       <div className="relative w-full h-full">
-        <DisplayPlayer display={display} playlist={playlist} />
+        <DisplayPlayer 
+          display={display} 
+          playlist={playlist}
+          onConnectionStatusChange={setPlayerConnectionStatus}
+        />
         
         {/* Clock Overlay */}
         {display.clockSettings && (
           <ClockOverlay settings={display.clockSettings} />
         )}
         
-        {/* Socket Connection Status Indicator */}
-        {!isConnected && display && (
-          <div className="absolute top-4 right-4 bg-yellow-500/80 text-white px-3 py-1 rounded-lg text-sm animate-pulse z-[1001]">
-            Reconnecting...
-          </div>
-        )}
       </div>
     </PlayerErrorBoundary>
   );

@@ -22,13 +22,18 @@ import type {
 interface DisplayPlayerProps {
   display: Display;
   playlist: Playlist;
+  onConnectionStatusChange?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
 }
 
-export function DisplayPlayer({ display, playlist: initialPlaylist }: DisplayPlayerProps) {
+export function DisplayPlayer({ display, playlist: initialPlaylist, onConnectionStatusChange }: DisplayPlayerProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [currentItem, setCurrentItem] = useState<PlaylistItem | null>(null);
-  const [nextItem, setNextItem] = useState<PlaylistItem | null>(null);
+  const [currentItem, setCurrentItem] = useState<PlaylistItem | null>(
+    initialPlaylist?.items?.[0] ?? null
+  );
+  const [nextItem, setNextItem] = useState<PlaylistItem | null>(
+    initialPlaylist?.items?.[1] ?? null
+  );
   const [playlist, setPlaylist] = useState<Playlist>(initialPlaylist);
   const [connectionStatus, setConnectionStatus] = useState<
     'connecting' | 'connected' | 'disconnected' | 'error'
@@ -60,9 +65,98 @@ export function DisplayPlayer({ display, playlist: initialPlaylist }: DisplayPla
     sendStatusUpdate,
   } = useDisplayWebSocket(display.id, display.uniqueUrl);
 
+  const playlistsEqual = useCallback((a: Playlist | null, b: Playlist | null): boolean => {
+    if (!a || !b) return false;
+    if (a.id !== b.id) return false;
+
+    const itemsA = a.items || [];
+    const itemsB = b.items || [];
+
+    if (itemsA.length !== itemsB.length) return false;
+
+    for (let i = 0; i < itemsA.length; i++) {
+      const itemA = itemsA[i];
+      const itemB = itemsB[i];
+
+      if (
+        itemA.id !== itemB.id ||
+        itemA.contentId !== itemB.contentId ||
+        itemA.order !== itemB.order ||
+        itemA.duration !== itemB.duration ||
+        itemA.transition !== itemB.transition ||
+        itemA.transitionDuration !== itemB.transitionDuration
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }, []);
+
+  const hasInitialized = useRef(false);
+
+  const applyPlaylist = useCallback((
+    nextPlaylist: Playlist | null | undefined,
+    force = false
+  ) => {
+    if (!nextPlaylist) return;
+    const normalizedItems = nextPlaylist.items || [];
+    const normalizedPlaylist: Playlist = {
+      ...nextPlaylist,
+      items: normalizedItems,
+    } as Playlist;
+
+    if (!force && hasInitialized.current && playlistsEqual(normalizedPlaylist, playlist)) {
+      return;
+    }
+
+    setPlaylist(normalizedPlaylist);
+
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = undefined;
+    }
+
+    const firstItem = normalizedPlaylist.items[0] ?? null;
+    const secondItem = normalizedPlaylist.items[1] ?? null;
+
+    setCurrentIndex(0);
+    setCurrentItem(firstItem);
+    setNextItem(secondItem);
+    viewStartTimeRef.current = Date.now();
+
+    playlistCache.cachePlaylist(display.id, normalizedPlaylist);
+
+    const preloadUrls = normalizedPlaylist.items
+      .slice(0, 3)
+      .map((item) => {
+        if (item.contentType === 'youtube') return null;
+        return item.content?.fileUrl;
+      })
+      .filter(Boolean) as string[];
+
+    if (preloadUrls.length > 0) {
+      optimizer.preloadContent(preloadUrls);
+    }
+
+    hasInitialized.current = true;
+  }, [display.id, optimizer, playlist, playlistsEqual]);
+
+  useEffect(() => {
+    if (!hasInitialized.current) {
+      applyPlaylist(initialPlaylist, true);
+      return;
+    }
+
+    if (!playlistsEqual(initialPlaylist, playlist)) {
+      applyPlaylist(initialPlaylist);
+    }
+  }, [initialPlaylist, applyPlaylist, playlist, playlistsEqual]);
+
   // Update connection status and handle offline mode
   useEffect(() => {
     setConnectionStatus(wsStatus);
+    onConnectionStatusChange?.(wsStatus);
 
     // Load cached playlist if disconnected
     if (wsStatus === 'disconnected' || wsStatus === 'error') {
@@ -71,7 +165,7 @@ export function DisplayPlayer({ display, playlist: initialPlaylist }: DisplayPla
         setPlaylist(cachedPlaylist);
       }
     }
-  }, [wsStatus, display.id, playlist.id]);
+  }, [wsStatus, display.id, playlist.id, onConnectionStatusChange]);
 
   // Handle WebSocket messages
   useEffect(() => {
@@ -81,12 +175,8 @@ export function DisplayPlayer({ display, playlist: initialPlaylist }: DisplayPla
       case 'playlist_update':
         const playlistMsg = lastMessage as PlaylistUpdateMessage;
         if (playlistMsg.data.displayIds.includes(display.id)) {
-          const newPlaylist = playlistMsg.data.playlist;
-          setPlaylist(newPlaylist);
-          // Cache the new playlist for offline use
-          playlistCache.cachePlaylist(display.id, newPlaylist);
-          // Reset to first item of new playlist
-          setCurrentIndex(0);
+          const newPlaylist = playlistMsg.data.playlist as Playlist | undefined;
+          applyPlaylist(newPlaylist);
         }
         break;
 
@@ -105,7 +195,7 @@ export function DisplayPlayer({ display, playlist: initialPlaylist }: DisplayPla
         }
         break;
     }
-  }, [lastMessage, display.id, currentIndex, sendStatusUpdate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lastMessage, display.id, currentIndex, sendStatusUpdate, applyPlaylist]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track view analytics
   const trackView = useCallback(
@@ -138,6 +228,11 @@ export function DisplayPlayer({ display, playlist: initialPlaylist }: DisplayPla
   // Move to next item function with performance optimization
   const moveToNextItem = useCallback(() => {
     if (!playlist || playlist.items.length === 0) return;
+    if (playlist.items.length === 1) {
+      // Only one item, keep displaying indefinitely
+      viewStartTimeRef.current = Date.now();
+      return;
+    }
 
     // Track the current item view as completed
     trackView(true, false);
@@ -222,50 +317,35 @@ export function DisplayPlayer({ display, playlist: initialPlaylist }: DisplayPla
     [currentIndex, playlist.items, isPlaying, sendStatusUpdate, moveToNextItem, trackView]
   );
 
-  // Initialize first item and preload content
-  useEffect(() => {
-    if (playlist.items.length > 0) {
-      setCurrentItem(playlist.items[0]);
-      if (playlist.items.length > 1) {
-        setNextItem(playlist.items[1]);
-      }
-
-      // Cache playlist for offline use
-      playlistCache.cachePlaylist(display.id, playlist);
-
-      // Preload upcoming content for smooth transitions
-      const preloadUrls = playlist.items
-        .slice(0, 3)
-        .map((item) => {
-          // Skip YouTube content from preloading
-          if (item.contentType === 'youtube') return null;
-          // Check if content exists and has fileUrl
-          return item.content?.fileUrl;
-        })
-        .filter(Boolean) as string[];
-
-      if (preloadUrls.length > 0) {
-        optimizer.preloadContent(preloadUrls);
-      }
-    }
-  }, [playlist, optimizer, display.id]);
-
   // Start playback timer
   useEffect(() => {
-    if (isPlaying && currentItem) {
-      const duration = currentItem.duration * 1000; // Convert to milliseconds
-
-      timerRef.current = setTimeout(() => {
-        moveToNextItem();
-      }, duration);
-
-      return () => {
-        if (timerRef.current) {
-          clearTimeout(timerRef.current);
-        }
-      };
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = undefined;
     }
-  }, [currentItem, isPlaying, moveToNextItem]);
+
+    if (!isPlaying || !currentItem) {
+      return;
+    }
+
+    if (playlist.items.length <= 1) {
+      // Single item playlists should remain on screen indefinitely
+      return;
+    }
+
+    const duration = currentItem.duration * 1000; // Convert to milliseconds
+
+    timerRef.current = setTimeout(() => {
+      moveToNextItem();
+    }, duration);
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = undefined;
+      }
+    };
+  }, [currentItem, isPlaying, moveToNextItem, playlist.items.length]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -393,18 +473,6 @@ export function DisplayPlayer({ display, playlist: initialPlaylist }: DisplayPla
         </div>
       )}
 
-      {/* Connection status indicator for production */}
-      {process.env.NODE_ENV === 'production' && connectionStatus !== 'connected' && (
-        <div className="absolute top-4 right-4 text-white bg-red-500/80 p-2 rounded text-sm flex items-center gap-2">
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-          </span>
-          {connectionStatus === 'disconnected' || connectionStatus === 'error'
-            ? 'Offline Mode'
-            : 'Connecting...'}
-        </div>
-      )}
     </div>
   );
 }

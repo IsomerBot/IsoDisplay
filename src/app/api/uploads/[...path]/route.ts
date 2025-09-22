@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import { getCurrentUser } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import { env as appEnv } from '@/lib/env';
+import { getUploadsBasePath } from '@/lib/upload/path-utils';
 
 export async function GET(
   request: NextRequest,
@@ -20,24 +21,7 @@ export async function GET(
     }
 
     // Resolve uploads directory path
-    const uploadsBasePath = (() => {
-      try {
-        // Prefer validated env FILE_STORAGE_PATH
-        if (appEnv.FILE_STORAGE_PATH) {
-          return path.isAbsolute(appEnv.FILE_STORAGE_PATH)
-            ? appEnv.FILE_STORAGE_PATH
-            : path.join(process.cwd(), appEnv.FILE_STORAGE_PATH);
-        }
-      } catch {}
-      // Fallbacks
-      const fallback = process.env.FILE_STORAGE_PATH;
-      if (fallback) {
-        return path.isAbsolute(fallback)
-          ? fallback
-          : path.join(process.cwd(), fallback);
-      }
-      return path.join(process.cwd(), 'uploads');
-    })();
+    const uploadsBasePath = getUploadsBasePath(appEnv.FILE_STORAGE_PATH);
     
     // Reconstruct the file path
     const filePath = path.join(uploadsBasePath, ...pathSegments);
@@ -97,9 +81,10 @@ export async function GET(
     // If logged in, enforce permissions; otherwise allow for display viewers
     if (user) {
       const hasPermission = (
-        user.permissions?.includes('CONTENT_VIEW') ||
         user.permissions?.includes('CONTENT_CREATE') ||
+        user.permissions?.includes('CONTENT_DELETE') ||
         user.permissions?.includes('USER_CONTROL') ||
+        user.permissions?.includes('SYSTEM_SETTINGS') ||
         contentOwnerId === user.id
       );
       if (!hasPermission) {

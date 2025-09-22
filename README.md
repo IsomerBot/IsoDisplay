@@ -1,217 +1,130 @@
-# IsoDisplay - Digital Content Management System
+# IsoDisplay
 
-A modern digital content management and display system built with Next.js, TypeScript, and PostgreSQL.
+IsoDisplay is a Docker-first digital signage platform. Upload media, arrange playlists, and stream them to remote displays backed by PostgreSQL and real-time WebSockets.
 
 ## Features
 
-- 📊 **Digital Content Management**: Upload and organize images, videos, and PDFs
-- 🖼️ **Dynamic Display System**: Create and manage digital displays with playlists
-- 👥 **Multi-user Support**: Role-based access control with admin and user roles
-- 🎨 **Customizable Layouts**: Multiple display layouts and configurations
-- 📱 **Responsive Design**: Works on desktop, tablet, and mobile devices
-- 🔒 **Secure Authentication**: Built-in authentication with NextAuth.js
-- 📁 **File Management**: Organized file storage with automatic thumbnail generation
-- 🎬 **Playlist Support**: Create and schedule content playlists
-- 📊 **Analytics**: Track display views and content performance
+- Upload images, videos, PDFs, and YouTube links
+- Build playlists and assign them to displays instantly
+- Role-based administration with real-time updates
+- Blank slate install — no demo content bundled
 
-## Tech Stack
+## Quick Start (Docker Compose)
 
-- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **Backend**: Node.js, Express, Prisma ORM
-- **Database**: PostgreSQL
-- **Authentication**: NextAuth.js
-- **File Processing**: Sharp (images), FFmpeg (videos), PDF.js
-- **Real-time**: Socket.io for live updates
-- **Deployment**: Docker, GitHub Actions
+1. **Clone the repository and prepare environment variables**
 
-## Prerequisites
+   ```bash
+   git clone https://github.com/your-org/isodisplay.git
+   cd isodisplay
+   cp .env.example .env
+   ```
 
-- Node.js 20.x or higher
-- PostgreSQL 15.x or higher
-- FFmpeg (for video processing)
-- npm or yarn
+   Update `.env` with your database password, NextAuth secret, and initial admin credentials.
 
-## Installation
+2. **Launch the stack**
 
-### Local Development
+   Edit `docker-compose.yml` so the `app` service points at the image published to GHCR (for example `ghcr.io/your-org/isodisplay:v1.0.0`). Then start the services:
 
-1. Clone the repository:
+   ```bash
+   docker compose pull
+   docker compose up -d
+   ```
 
-```bash
-git clone https://github.com/yourusername/isodisplay.git
-cd isodisplay
+   Once running, apply migrations and seed the admin user:
+
+   ```bash
+   docker compose exec app npx prisma migrate deploy
+   docker compose exec app npx prisma db seed
+   ```
+
+3. **Log in**
+
+   Open [http://localhost:3000](http://localhost:3000) and sign in with the admin email/username/password you defined in `.env`.
+
+### Compose Reference
+
+```yaml
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-isodisplay}
+      POSTGRES_USER: ${POSTGRES_USER:-isodisplay}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - ./data/postgres/db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-isodisplay}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ghcr.io/<owner>/<repo>:<tag>
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-isodisplay}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-isodisplay}?schema=public
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
+      FILE_STORAGE_PATH: /app/uploads
+    volumes:
+      - ./uploads:/app/uploads
+    ports:
+      - "3000:3000"
+
+networks:
+  default:
+    driver: bridge
 ```
 
-2. Install dependencies:
-
-```bash
-npm install
-```
-
-3. Set up environment variables:
-
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
-
-4. Set up the database:
-
-```bash
-npx prisma migrate dev
-npx prisma db seed
-```
-
-5. Start the development server:
-
-```bash
-npm run dev
-```
-
-Visit `http://localhost:3000` to see the application.
-
-### Docker Deployment
-
-1. Clone the repository:
-
-```bash
-git clone https://github.com/yourusername/isodisplay.git
-cd isodisplay
-```
-
-2. Create environment file:
-
-```bash
-cp .env.production.example .env
-# Edit .env with your production configuration
-```
-
-3. Build and run with Docker Compose:
-
-```bash
-docker-compose up -d
-```
-
-The application will be available at `http://localhost:3000`.
+Replace `<owner>/<repo>:<tag>` with the tag produced by the release workflow, then run `docker compose pull` before `docker compose up -d`.
 
 ## Environment Variables
 
-### Required Variables
+| Variable | Description |
+|----------|-------------|
+| `POSTGRES_DB` | Database name (default `isodisplay`) |
+| `POSTGRES_USER` | Database user (default `isodisplay`) |
+| `POSTGRES_PASSWORD` | Database password (required) |
+| `NEXTAUTH_SECRET` | 32+ character secret for NextAuth (required) |
+| `NEXTAUTH_URL` | Public URL for callbacks (default `http://localhost:3000`) |
+| `ADMIN_EMAIL` | Email for the initial administrator account |
+| `ADMIN_USERNAME` | Username for the initial administrator account |
+| `ADMIN_PASSWORD` | Password for the initial administrator account |
 
-- `DATABASE_URL`: PostgreSQL connection string
-- `NEXTAUTH_SECRET`: Secret for NextAuth.js (generate with `openssl rand -base64 32`)
-- `NEXTAUTH_URL`: Your application URL
+Uploads live in `./uploads`, which ships empty apart from a `.gitkeep` so you can populate it with your own media.
 
-### Optional Variables
+## GitHub Actions (GHCR Release)
 
-- `UPLOAD_DIR`: Directory for file uploads (default: `./uploads`)
-- `MAX_FILE_SIZE`: Maximum file size in bytes (default: 100MB)
-- `NODE_ENV`: Environment mode (`development`, `production`)
-
-## Project Structure
+`.github/workflows/manual-build.yml` defines a manual workflow that builds the Docker image and pushes it to GitHub Container Registry. When you trigger the workflow from the Actions tab you will be prompted for a tag (for example `v1.0.0`). The workflow publishes two tags:
 
 ```
-isodisplay/
-├── src/
-│   ├── app/              # Next.js app directory
-│   ├── components/       # React components
-│   ├── lib/             # Utility functions
-│   ├── styles/          # Global styles
-│   └── types/           # TypeScript types
-├── prisma/              # Database schema and migrations
-├── public/              # Static files
-├── uploads/             # User uploads (gitignored)
-├── scripts/             # Utility scripts
-└── docker-compose.yml   # Docker configuration
+ghcr.io/<owner>/<repo>:<tag>
+ghcr.io/<owner>/<repo>:latest
 ```
 
-## Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm start` - Start production server
-- `npm run lint` - Run ESLint
-- `npm run type-check` - Check TypeScript types
-- `npm run db:migrate` - Run database migrations
-- `npm run db:seed` - Seed database with sample data
-- `npm run db:reset` - Reset database (development only)
-
-## Default Admin Account
-
-After seeding the database, you can log in with:
-
-- **Email**: admin@example.com
-- **Password**: admin123
-
-⚠️ **Important**: Change these credentials immediately in production!
-
-## Production Deployment
-
-### Using GitHub Actions
-
-The project includes a CI/CD pipeline that:
-
-1. Runs tests and linting on pull requests
-2. Builds Docker images on merge to main
-3. Pushes images to GitHub Container Registry
-
-### Required GitHub Secrets
-
-Set these in your repository settings:
-
-- `DOCKER_USERNAME` (optional, for Docker Hub)
-- `DOCKER_PASSWORD` (optional, for Docker Hub)
-- `NEXT_PUBLIC_APP_URL` - Your production URL
-
-### Manual Deployment
-
-1. Build the Docker image:
+To deploy using the published image:
 
 ```bash
-docker build -t isodisplay:latest .
+docker login ghcr.io -u <owner> --password-stdin <<< "$GH_TOKEN"
+# update compose to use the published image
+docker compose pull
+docker compose up -d
 ```
 
-2. Run with environment variables:
+## Operations Tips
 
-```bash
-docker run -d \
-  -p 3000:3000 \
-  -e DATABASE_URL="your-database-url" \
-  -e NEXTAUTH_SECRET="your-secret" \
-  -e NEXTAUTH_URL="https://your-domain.com" \
-  -v /path/to/uploads:/app/uploads \
-  isodisplay:latest
-```
-
-## Security Considerations
-
-- Always use HTTPS in production
-- Set strong passwords for all accounts
-- Keep dependencies updated
-- Use environment variables for sensitive data
-- Configure rate limiting for API endpoints
-- Implement proper CORS settings
-- Regular database backups
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a pull request
+- `docker compose logs -f app` – follow runtime logs
+- `docker compose exec app npx prisma studio` – inspect the database UI
+- Keep `data/postgres` and `uploads` backed up regularly
+- Re-run `docker compose exec app npx prisma db seed` whenever you change admin credentials in `.env`
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Support
-
-For issues and questions, please use the GitHub issue tracker.
-
-## Acknowledgments
-
-- Built with Next.js and the amazing React ecosystem
-- Uses Tailwind CSS for styling
-- Prisma for database management
-- Special thanks to all contributors
+Provided as-is. Review secrets, TLS, and network controls before deploying to production.

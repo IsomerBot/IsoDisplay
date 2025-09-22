@@ -3,6 +3,7 @@ import io, { Socket } from 'socket.io-client';
 
 interface UseSocketConnectionOptions {
   displayId?: string;
+  displaySlug?: string;
   onPlaylistUpdate?: (playlist: any) => void;
   onDisplayUpdate?: (display: any) => void;
   onContentUpdate?: (content: any) => void;
@@ -13,6 +14,7 @@ interface UseSocketConnectionOptions {
 
 export function useSocketConnection({
   displayId,
+  displaySlug,
   onPlaylistUpdate,
   onDisplayUpdate,
   onContentUpdate,
@@ -32,7 +34,7 @@ export function useSocketConnection({
   }, [displayId]);
 
   const connect = useCallback(() => {
-    if (!enabled || !displayId || socketRef.current?.connected) return;
+    if (!enabled || !displayId || !displaySlug || socketRef.current?.connected) return;
 
     socketRef.current = io({
       path: '/socket.io',
@@ -48,9 +50,12 @@ export function useSocketConnection({
     socket.on('connect', () => {
       console.log('Socket connected');
       setIsConnected(true);
-      
-      // Subscribe to display
-      socket.emit('subscribe_display', displayId);
+
+      // Register display connection with slug verification
+      socket.emit('register_display', {
+        displayId,
+        displayUrl: displaySlug,
+      });
       
       // Start heartbeat
       heartbeatIntervalRef.current = setInterval(sendHeartbeat, 30000);
@@ -75,9 +80,10 @@ export function useSocketConnection({
     socket.on('playlist_update', (message) => {
       console.log('Playlist update:', message);
       // Handle both message.data.playlist and message.payload for compatibility
-      const playlist = message.data?.playlist !== undefined ? message.data.playlist : message.payload;
-      // Always call the handler, even with null playlist (when "none" is selected)
-      onPlaylistUpdate?.(playlist);
+      const playlist = message?.data?.playlist ?? message?.payload;
+      if (playlist !== undefined) {
+        onPlaylistUpdate?.(playlist);
+      }
     });
 
     socket.on('display_update', (message) => {
@@ -94,6 +100,10 @@ export function useSocketConnection({
     socket.on('command', (message) => {
       console.log('Command received:', message);
       onCommand?.(message.payload);
+    });
+
+    socket.on('registered', () => {
+      setIsConnected(true);
     });
 
     socket.on('heartbeat_ack', (data) => {
@@ -120,7 +130,7 @@ export function useSocketConnection({
   }, []);
 
   useEffect(() => {
-    if (enabled && displayId) {
+    if (enabled && displayId && displaySlug) {
       connect();
     }
 
@@ -128,7 +138,7 @@ export function useSocketConnection({
       disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, displayId]); // Don't include connect/disconnect to avoid loops
+  }, [enabled, displayId, displaySlug]); // Don't include connect/disconnect to avoid loops
 
   return {
     isConnected,

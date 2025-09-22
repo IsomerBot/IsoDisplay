@@ -3,6 +3,7 @@ const { parse } = require('url');
 const next = require('next');
 const { Server } = require('socket.io');
 const { jwtVerify } = require('jose');
+const { PrismaClient } = require('./src/generated/prisma');
 
 // Minimal cookie parser
 function parseCookies(cookieHeader) {
@@ -35,8 +36,11 @@ const port = process.env.PORT || 3000;
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
+// Shared Prisma client for socket handlers
+const prisma = new PrismaClient();
+
 // In-memory storage for WebSocket connections
-const displayConnections = new Map(); // displayId -> socketId
+const displayConnections = new Map(); // displayId -> Set<socketId>
 const adminConnections = new Set(); // socketIds
 
 app.prepare().then(() => {
@@ -46,9 +50,13 @@ app.prepare().then(() => {
   });
 
   // Initialize Socket.IO server
+  const allowedOrigins = process.env.WS_ALLOWED_ORIGINS
+    ? process.env.WS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim()).filter(Boolean)
+    : true;
+
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.NEXTAUTH_URL || "http://localhost:3000",
+      origin: allowedOrigins,
       methods: ["GET", "POST"],
       credentials: true
     },
@@ -103,46 +111,69 @@ app.prepare().then(() => {
     // Handle display client registration
     socket.on('register_display', async (data) => {
       try {
-        const { displayId, displayUrl } = data;
-        console.log('📺 Display registering:', displayId, displayUrl);
-
-        // Verify display exists and URL matches using Prisma Client JS
-        try {
-          const { PrismaClient } = require('./src/generated/prisma');
-          const prisma = new PrismaClient();
-          const display = await prisma.display.findUnique({
-            where: { urlSlug: displayUrl },
-            select: { id: true },
-          });
-          await prisma.$disconnect();
-          if (!display || display.id !== displayId) {
-            socket.emit('error', { message: 'Invalid display credentials' });
-            return;
-          }
-        } catch (dbErr) {
-          console.error('Display verification error:', dbErr);
-          // If DB is unavailable, fail closed for registration
-          socket.emit('error', { message: 'Registration failed' });
+        const { displayId, displayUrl } = data || {};
+        if (!displayId || !displayUrl) {
+          socket.emit('error', { message: 'Missing display credentials' });
           return;
         }
 
-        displayConnections.set(displayId, socket.id);
+        console.log('📺 Display registering:', displayId, displayUrl);
+
+        const display = await prisma.display.findUnique({
+          where: { urlSlug: displayUrl },
+          select: { id: true },
+        });
+
+        if (!display || display.id !== displayId) {
+          socket.emit('error', { message: 'Invalid display credentials' });
+          return;
+        }
+
+        socket.data.displayId = displayId;
+        socket.data.displayUrl = displayUrl;
+
+        let connections = displayConnections.get(displayId);
+        if (!connections) {
+          connections = new Set();
+          displayConnections.set(displayId, connections);
+        }
+
+        const wasOffline = connections.size === 0;
+        connections.add(socket.id);
+
         socket.join(`display:${displayId}`);
-        
+
+        if (wasOffline) {
+          await prisma.display.update({
+            where: { id: displayId },
+            data: {
+              isOnline: true,
+              lastSeen: new Date(),
+            },
+          });
+
+          const statusMessage = {
+            type: 'status_update',
+            data: {
+              displayId,
+              status: 'online',
+              timestamp: new Date().toISOString(),
+            },
+            timestamp: new Date().toISOString(),
+          };
+
+          io.to('admins').emit('status_update', statusMessage);
+        } else {
+          // Update heartbeat for additional connections
+          await prisma.display.update({
+            where: { id: displayId },
+            data: {
+              lastSeen: new Date(),
+            },
+          });
+        }
+
         console.log(`✅ Display ${displayId} registered with socket ${socket.id}`);
-        
-        // Notify admins of display coming online
-        const statusMessage = {
-          type: 'status_update',
-          data: {
-            displayId,
-            status: 'online',
-            timestamp: new Date().toISOString()
-          },
-          timestamp: new Date().toISOString()
-        };
-        
-        io.to('admins').emit('status_update', statusMessage);
         socket.emit('registered', { displayId, status: 'connected' });
       } catch (error) {
         console.error('❌ Error registering display:', error);
@@ -270,11 +301,17 @@ app.prepare().then(() => {
     // Handle heartbeat from displays
     socket.on('heartbeat', async (data) => {
       try {
-        const { displayId } = data;
-        
-        // TODO: Update last seen in database
-        // await displayService.updateLastSeen(displayId);
-        
+        const { displayId } = data || {};
+        if (!displayId) return;
+
+        await prisma.display.update({
+          where: { id: displayId },
+          data: {
+            isOnline: true,
+            lastSeen: new Date(),
+          },
+        });
+
         socket.emit('heartbeat_ack', { timestamp: new Date().toISOString() });
       } catch (error) {
         console.error('💓 Error handling heartbeat:', error);
@@ -288,33 +325,39 @@ app.prepare().then(() => {
       // Remove from admin connections
       adminConnections.delete(socket.id);
 
-      // Find and update display status if this was a display connection
-      for (const [displayId, socketId] of displayConnections.entries()) {
-        if (socketId === socket.id) {
-          displayConnections.delete(displayId);
-          
-          try {
-            console.log('📺 Display offline:', displayId);
-            
-            // TODO: Update display status to offline
-            // await displayService.updateStatus(displayId, 'offline');
-            
-            // Notify admins of display going offline
-            const statusMessage = {
-              type: 'status_update',
-              data: {
-                displayId,
-                status: 'offline',
-                timestamp: new Date().toISOString()
-              },
-              timestamp: new Date().toISOString()
-            };
-            
-            io.to('admins').emit('status_update', statusMessage);
-          } catch (error) {
-            console.error('❌ Error updating display status on disconnect:', error);
+      const displayId = socket.data.displayId;
+      if (displayId) {
+        const connections = displayConnections.get(displayId);
+        if (connections) {
+          connections.delete(socket.id);
+          if (connections.size === 0) {
+            displayConnections.delete(displayId);
+            try {
+              console.log('📺 Display offline:', displayId);
+
+              await prisma.display.update({
+                where: { id: displayId },
+                data: {
+                  isOnline: false,
+                  lastSeen: new Date(),
+                },
+              });
+
+              const statusMessage = {
+                type: 'status_update',
+                data: {
+                  displayId,
+                  status: 'offline',
+                  timestamp: new Date().toISOString(),
+                },
+                timestamp: new Date().toISOString(),
+              };
+
+              io.to('admins').emit('status_update', statusMessage);
+            } catch (error) {
+              console.error('❌ Error updating display status on disconnect:', error);
+            }
           }
-          break;
         }
       }
     });
@@ -323,8 +366,9 @@ app.prepare().then(() => {
   console.log('📡 WebSocket server initialized');
 
   httpServer
-    .once('error', (err) => {
+    .once('error', async (err) => {
       console.error('❌ Server error:', err);
+      await prisma.$disconnect().catch(() => {});
       process.exit(1);
     })
     .listen(port, () => {
@@ -336,8 +380,9 @@ app.prepare().then(() => {
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down gracefully');
     io.close();
-    httpServer.close(() => {
+    httpServer.close(async () => {
       console.log('HTTP server closed');
+      await prisma.$disconnect().catch(() => {});
       process.exit(0);
     });
   });
@@ -345,8 +390,9 @@ app.prepare().then(() => {
   process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down gracefully');
     io.close();
-    httpServer.close(() => {
+    httpServer.close(async () => {
       console.log('HTTP server closed');
+      await prisma.$disconnect().catch(() => {});
       process.exit(0);
     });
   });

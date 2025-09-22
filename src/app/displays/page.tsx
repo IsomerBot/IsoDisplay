@@ -20,9 +20,11 @@ import DisplayModal from '@/components/displays/DisplayModal';
 import { Display, DisplayStatus } from '@/types/display';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
+import { useCSRF } from '@/hooks/useCSRF';
 
 export default function DisplaysPage() {
   const { user: currentUser, loading: authLoading } = useAuth();
+  const { secureFetch } = useCSRF();
   const router = useRouter();
   const [displays, setDisplays] = useState<Display[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,12 +104,8 @@ export default function DisplaysPage() {
     setDeleteConfirmOpen(false);
     
     try {
-      const response = await fetch(`/api/displays/${displayToDelete.id}`, {
+      const response = await secureFetch(`/api/displays/${displayToDelete.id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'same-origin',
       });
 
       if (response.ok) {

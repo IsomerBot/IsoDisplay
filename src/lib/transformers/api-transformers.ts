@@ -24,6 +24,8 @@ import type {
 } from '@/types/playlist';
 
 import { TransitionType, ContentType, DisplayOrientation } from '@/generated/prisma';
+import path from 'path';
+import { getUploadsBasePath } from '@/lib/upload/path-utils';
 
 // ============================================
 // API to Frontend Transformers
@@ -431,6 +433,7 @@ function databaseToApiPlaylistItem(dbItem: any): ApiPlaylistItemResponse {
 export function databaseToApiContent(dbContent: any): ApiContentResponse {
   // Process thumbnail URL
   let thumbnailUrl = undefined;
+  const uploadsBasePath = getUploadsBasePath();
   
   // Check for thumbnails in FileThumbnail table (including YouTube)
   if (dbContent.thumbnails && dbContent.thumbnails.length > 0) {
@@ -443,24 +446,29 @@ export function databaseToApiContent(dbContent: any): ApiContentResponse {
       // Check if it's an external URL (for YouTube thumbnails stored in FileThumbnail)
       if (thumbnail.filePath.startsWith('http://') || thumbnail.filePath.startsWith('https://')) {
         thumbnailUrl = thumbnail.filePath;
-      }
-      // Handle absolute paths (e.g., /Users/sronnie/Documents/Coding/IsoDisplay/uploads/...)
-      else if (thumbnail.filePath.includes('/uploads/')) {
-        // Extract everything after '/uploads/' to get the relative path
-        const uploadsIndex = thumbnail.filePath.indexOf('/uploads/');
-        const relativePath = thumbnail.filePath.substring(uploadsIndex + '/uploads/'.length);
-        thumbnailUrl = `/uploads/${relativePath}`;
-      } else if (thumbnail.filePath.startsWith('/uploads')) {
-        // If it starts with /uploads, it's already relative
-        thumbnailUrl = thumbnail.filePath;
-      } else if (thumbnail.filePath.startsWith('uploads/')) {
-        // For paths that start with uploads/ (no leading slash)
-        const relativePath = thumbnail.filePath.replace(/^uploads\//, '');
-        thumbnailUrl = `/uploads/${relativePath}`;
       } else {
-        // For any other path format
-        const relativePath = thumbnail.filePath.replace(/^\.\/uploads\//, '').replace(/^\.\//, '');
-        thumbnailUrl = `/uploads/${relativePath}`;
+        const normalizedFilePath = thumbnail.filePath.replace(/\\/g, '/');
+        const normalizedBasePath = uploadsBasePath.replace(/\\/g, '/');
+
+        if (normalizedFilePath.startsWith(normalizedBasePath)) {
+          const relativePath = normalizedFilePath.slice(normalizedBasePath.length).replace(/^\/+/, '');
+          thumbnailUrl = `/uploads/${relativePath}`;
+        } else {
+          const relativeFromBase = path.relative(uploadsBasePath, thumbnail.filePath);
+          if (!relativeFromBase.startsWith('..') && !path.isAbsolute(relativeFromBase)) {
+            thumbnailUrl = `/uploads/${relativeFromBase.replace(/\\/g, '/')}`;
+          } else if (normalizedFilePath.startsWith('/uploads/')) {
+            thumbnailUrl = normalizedFilePath;
+          } else if (normalizedFilePath.startsWith('uploads/')) {
+            thumbnailUrl = `/uploads/${normalizedFilePath.replace(/^uploads\//, '')}`;
+          } else {
+            const uploadsIndex = normalizedFilePath.indexOf('/uploads/');
+            if (uploadsIndex !== -1) {
+              const relativePath = normalizedFilePath.substring(uploadsIndex + '/uploads/'.length);
+              thumbnailUrl = `/uploads/${relativePath}`;
+            }
+          }
+        }
       }
     }
   }

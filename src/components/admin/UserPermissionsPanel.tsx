@@ -36,57 +36,15 @@ const PERMISSION_CATEGORIES = {
     color: 'text-blue-400',
     bgColor: 'bg-blue-500/10',
     permissions: [
-      { 
-        key: 'CONTENT_CREATE' as Permission,
-        label: 'Create Content',
-        description: 'Upload and add new media files'
+      {
+        key: Permission.CONTENT_CREATE,
+        label: 'Manage Content',
+        description: 'Upload and edit media items'
       },
       {
-        key: 'CONTENT_UPDATE' as Permission,
-        label: 'Edit Content',
-        description: 'Modify existing media properties and metadata'
-      },
-      {
-        key: 'CONTENT_DELETE' as Permission,
+        key: Permission.CONTENT_DELETE,
         label: 'Delete Content',
-        description: 'Remove media files from the system'
-      },
-      {
-        key: 'CONTENT_VIEW' as Permission,
-        label: 'View Content',
-        description: 'Browse and preview media library'
-      }
-    ]
-  },
-  'Display Management': {
-    icon: Monitor,
-    color: 'text-green-400',
-    bgColor: 'bg-green-500/10',
-    permissions: [
-      {
-        key: 'DISPLAY_CREATE' as Permission,
-        label: 'Create Displays',
-        description: 'Add new display devices to the system'
-      },
-      {
-        key: 'DISPLAY_UPDATE' as Permission,
-        label: 'Edit Displays',
-        description: 'Modify display settings and configurations'
-      },
-      {
-        key: 'DISPLAY_DELETE' as Permission,
-        label: 'Delete Displays',
-        description: 'Remove displays from the system'
-      },
-      {
-        key: 'DISPLAY_CONTROL' as Permission,
-        label: 'Control Displays',
-        description: 'Remote control display playback and settings'
-      },
-      {
-        key: 'DISPLAY_VIEW' as Permission,
-        label: 'View Displays',
-        description: 'View display status and information'
+        description: 'Remove media from the library'
       }
     ]
   },
@@ -96,24 +54,31 @@ const PERMISSION_CATEGORIES = {
     bgColor: 'bg-purple-500/10',
     permissions: [
       {
-        key: 'PLAYLIST_CREATE' as Permission,
+        key: Permission.PLAYLIST_CREATE,
         label: 'Create Playlists',
-        description: 'Build new content playlists'
+        description: 'Build and edit playlists'
       },
       {
-        key: 'PLAYLIST_UPDATE' as Permission,
-        label: 'Edit Playlists',
-        description: 'Modify playlist items and settings'
-      },
-      {
-        key: 'PLAYLIST_DELETE' as Permission,
+        key: Permission.PLAYLIST_DELETE,
         label: 'Delete Playlists',
         description: 'Remove playlists from the system'
       },
       {
-        key: 'PLAYLIST_VIEW' as Permission,
-        label: 'View Playlists',
-        description: 'Browse and preview playlists'
+        key: Permission.PLAYLIST_ASSIGN,
+        label: 'Assign Playlists',
+        description: 'Assign playlists to displays'
+      }
+    ]
+  },
+  'Display Management': {
+    icon: Monitor,
+    color: 'text-green-400',
+    bgColor: 'bg-green-500/10',
+    permissions: [
+      {
+        key: Permission.DISPLAY_CONTROL,
+        label: 'Control Displays',
+        description: 'Manage display playback and settings'
       }
     ]
   },
@@ -123,24 +88,9 @@ const PERMISSION_CATEGORIES = {
     bgColor: 'bg-orange-500/10',
     permissions: [
       {
-        key: 'USER_CREATE' as Permission,
-        label: 'Create Users',
-        description: 'Add new user accounts'
-      },
-      {
-        key: 'USER_UPDATE' as Permission,
-        label: 'Edit Users',
-        description: 'Modify user details and status'
-      },
-      {
-        key: 'USER_DELETE' as Permission,
-        label: 'Delete Users',
-        description: 'Remove user accounts'
-      },
-      {
-        key: 'USER_CONTROL' as Permission,
-        label: 'Control Users',
-        description: 'Manage user permissions and access levels'
+        key: Permission.USER_CONTROL,
+        label: 'Manage Users',
+        description: 'Create users and adjust their access'
       }
     ]
   },
@@ -150,9 +100,9 @@ const PERMISSION_CATEGORIES = {
     bgColor: 'bg-red-500/10',
     permissions: [
       {
-        key: 'ADMIN' as Permission,
-        label: 'Administrator',
-        description: 'Full system access and control'
+        key: Permission.SYSTEM_SETTINGS,
+        label: 'System Settings',
+        description: 'Modify global configuration'
       }
     ]
   }
@@ -167,19 +117,20 @@ const ROLE_PRESETS = {
   },
   manager: {
     name: 'Manager',
-    description: 'Manage content and displays',
+    description: 'Manage content, playlists, and displays',
     permissions: [
-      'CONTENT_CREATE', 'CONTENT_UPDATE', 'CONTENT_DELETE', 'CONTENT_VIEW',
-      'DISPLAY_CREATE', 'DISPLAY_UPDATE', 'DISPLAY_CONTROL', 'DISPLAY_VIEW',
-      'PLAYLIST_CREATE', 'PLAYLIST_UPDATE', 'PLAYLIST_DELETE', 'PLAYLIST_VIEW'
-    ] as Permission[]
+      Permission.CONTENT_CREATE,
+      Permission.CONTENT_DELETE,
+      Permission.PLAYLIST_CREATE,
+      Permission.PLAYLIST_DELETE,
+      Permission.PLAYLIST_ASSIGN,
+      Permission.DISPLAY_CONTROL
+    ]
   },
   viewer: {
     name: 'Viewer',
     description: 'View-only access',
-    permissions: [
-      'CONTENT_VIEW', 'DISPLAY_VIEW', 'PLAYLIST_VIEW'
-    ] as Permission[]
+    permissions: []
   }
 };
 

@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
+import { shouldUseSecureCookies } from './cookie-helpers';
 
 const CSRF_TOKEN_LENGTH = 32;
 const CSRF_COOKIE_NAME = 'csrf-token';
@@ -16,7 +17,7 @@ export async function setCSRFToken(): Promise<string> {
   
   cookieStore.set(CSRF_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     sameSite: 'strict',
     path: '/',
     maxAge: 60 * 60 * 24, // 24 hours

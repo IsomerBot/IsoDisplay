@@ -8,7 +8,7 @@ import { processImage, THUMBNAIL_SIZES, generateDisplayThumbnail } from './image
 import { generateVideoThumbnails, getVideoMetadata } from './video-processor';
 import { convertPowerPointToPdf, getPdfMetadata, generatePdfThumbnail } from './document-processor';
 import { processPdfFile as processPdfFileNode } from './pdf-processor-working';
-import { env } from '@/lib/env';
+import { getUploadsBasePath } from './path-utils';
 
 // File storage metadata
 export interface FileMetadata {
@@ -27,25 +27,11 @@ export class FileStorageService {
   private basePath: string;
 
   constructor(basePath?: string) {
-    // Use local uploads directory for development
-    // For Next.js, we need to handle both local dev and production environments
-    if (basePath) {
-      this.basePath = basePath;
-    } else if (process.env.FILE_STORAGE_PATH) {
-      // If absolute path provided, use it directly
-      if (path.isAbsolute(process.env.FILE_STORAGE_PATH)) {
-        this.basePath = process.env.FILE_STORAGE_PATH;
-      } else {
-        // For relative paths, resolve from the actual project root
-        // In Next.js, the app runs from different working directories
-        this.basePath = path.join(process.cwd() === '/app' ? '/Users/sronnie/Documents/Coding/IsoDisplay' : process.cwd(), process.env.FILE_STORAGE_PATH);
-      }
-    } else {
-      // Default to uploads directory in project root
-      // Handle the /app working directory issue in development
-      const projectRoot = process.cwd() === '/app' ? '/Users/sronnie/Documents/Coding/IsoDisplay' : process.cwd();
-      this.basePath = path.join(projectRoot, 'uploads');
-    }
+    const resolvedBase = basePath
+      ? (path.isAbsolute(basePath) ? basePath : path.resolve(process.cwd(), basePath))
+      : getUploadsBasePath();
+
+    this.basePath = path.resolve(resolvedBase);
     console.log('FileStorageService initialized with basePath:', this.basePath);
   }
 
@@ -118,7 +104,16 @@ export class FileStorageService {
       await fs.mkdir(path.dirname(storagePath), { recursive: true });
       
       // Move file to final location
-      await fs.rename(file.path, storagePath);
+      try {
+        await fs.rename(file.path, storagePath);
+      } catch (error: any) {
+        if (error?.code === 'EXDEV') {
+          await fs.copyFile(file.path, storagePath);
+          await fs.unlink(file.path);
+        } else {
+          throw error;
+        }
+      }
       
       // Create content record
       const content = await prisma.content.create({
@@ -173,6 +168,9 @@ export class FileStorageService {
     mimeType: string
   ): Promise<void> {
     console.log('Processing file async:', { contentId, filePath, mimeType });
+    const absoluteFilePath = path.isAbsolute(filePath)
+      ? filePath
+      : path.resolve(this.basePath, filePath);
     // Update status to processing
     await this.updateProcessingStatus(contentId, ProcessingStatus.PROCESSING);
     
@@ -189,8 +187,6 @@ export class FileStorageService {
     try {
       if (mimeType.startsWith('image/')) {
         // Process image
-        // Ensure we're using absolute paths
-        const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.join('/Users/sronnie/Documents/Coding/IsoDisplay', filePath);
         // Create unique thumbnail directory for this image using content ID
         const outputDir = path.join(path.dirname(absoluteFilePath), 'thumbnails', contentId);
         console.log('Thumbnail output directory:', outputDir);
@@ -249,8 +245,7 @@ export class FileStorageService {
         });
       } else if (mimeType.startsWith('video/')) {
         // Process video
-        console.log('Processing video file:', filePath);
-        const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.join('/Users/sronnie/Documents/Coding/IsoDisplay', filePath);
+        console.log('Processing video file:', absoluteFilePath);
         const videoMetadata = await getVideoMetadata(absoluteFilePath);
         console.log('Video metadata:', videoMetadata);
         metadata.width = videoMetadata.width;
@@ -322,8 +317,8 @@ export class FileStorageService {
         // Process PDF using the working processor
         console.log('Processing PDF with working processor...');
         // Create unique thumbnail directory for this PDF using content ID
-        const outputDir = path.join(path.dirname(filePath), 'thumbnails', contentId);
-        const result = await processPdfFileNode(filePath, outputDir);
+        const outputDir = path.join(path.dirname(absoluteFilePath), 'thumbnails', contentId);
+        const result = await processPdfFileNode(absoluteFilePath, outputDir);
         
         console.log('PDF processing result:', {
           metadata: result.metadata,
@@ -377,15 +372,15 @@ export class FileStorageService {
         mimeType.includes('presentation')
       ) {
         // Convert PowerPoint to PDF
-        const pdfPath = await convertPowerPointToPdf(filePath);
+        const pdfPath = await convertPowerPointToPdf(absoluteFilePath);
         const pdfMetadata = await getPdfMetadata(pdfPath);
         metadata.pages = pdfMetadata.pages;
         
         // Generate thumbnail from converted PDF
-        const outputDir = path.join(path.dirname(filePath), 'thumbnails');
+        const outputDir = path.join(path.dirname(absoluteFilePath), 'thumbnails');
         await fs.mkdir(outputDir, { recursive: true });
         const thumbPath = path.join(outputDir, 'thumb.jpg');
-        
+
         await generatePdfThumbnail(pdfPath, thumbPath);
         const stats = await fs.stat(thumbPath);
         
@@ -633,9 +628,7 @@ export class FileStorageService {
 
 // Export factory function to create instances with proper path
 export function getFileStorageService(): FileStorageService {
-  // Use absolute path to avoid issues with Next.js working directories
-  const absolutePath = '/Users/sronnie/Documents/Coding/IsoDisplay/uploads';
-  return new FileStorageService(absolutePath);
+  return new FileStorageService(getUploadsBasePath());
 }
 
 // Export singleton for backward compatibility

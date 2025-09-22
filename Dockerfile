@@ -1,11 +1,21 @@
 # Multi-stage build for Next.js application
 FROM node:20-alpine AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat
+# Install system dependencies required for native modules like node-canvas
+RUN apk add --no-cache \
+  libc6-compat \
+  python3 \
+  make \
+  g++ \
+  cairo-dev \
+  pango-dev \
+  libpng-dev \
+  jpeg-dev \
+  giflib-dev
 WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma
 RUN npm ci
 
 # Rebuild the source code only when needed
@@ -20,6 +30,8 @@ RUN npx prisma generate
 # Build the application
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/isodisplay?schema=public
+ENV NEXTAUTH_SECRET=placeholder-build-secret-that-is-long-enough-1234
 RUN npm run build
 
 # Production image, copy all the files and run next
@@ -28,6 +40,15 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Install runtime libraries required by native dependencies
+RUN apk add --no-cache \
+  libc6-compat \
+  cairo \
+  pango \
+  libpng \
+  jpeg \
+  giflib
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

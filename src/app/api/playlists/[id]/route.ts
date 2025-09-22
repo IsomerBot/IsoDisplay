@@ -7,6 +7,24 @@ import {
   type UpdatePlaylistInput 
 } from '@/lib/validators/playlist-schemas';
 import { validationErrorResponse, ErrorResponses, isValidUUID } from '@/lib/validators/api-validators';
+import { broadcastPlaylistUpdate, broadcastDisplayUpdate } from '@/lib/socket-server';
+import { apiToFrontendPlaylist } from '@/lib/transformers/api-transformers';
+import { displayService } from '@/lib/services/display-service';
+
+const serializeBigInt = (obj: any): any => {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'bigint') return obj.toString();
+  if (obj instanceof Date) return obj.toISOString();
+  if (Array.isArray(obj)) return obj.map(serializeBigInt);
+  if (typeof obj === 'object') {
+    const serialized: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      serialized[key] = serializeBigInt(value);
+    }
+    return serialized;
+  }
+  return obj;
+};
 
 interface RouteParams {
   params: Promise<{
@@ -142,6 +160,30 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Transform database response to API format
     const apiResponse = databaseToApiPlaylist(playlist);
+
+    // Broadcast updates to any displays using this playlist
+    try {
+      const frontendPlaylist = apiToFrontendPlaylist(apiResponse);
+      const serializedPlaylist = serializeBigInt(frontendPlaylist);
+      const displays = playlist?.displays ?? [];
+
+      for (const display of displays) {
+        const displayId = display.id;
+        broadcastPlaylistUpdate(displayId, serializedPlaylist);
+
+        const fullDisplay = await displayService.getDisplay(displayId);
+        if (fullDisplay) {
+          const serializedDisplay = serializeBigInt(fullDisplay);
+          broadcastDisplayUpdate(displayId, {
+            ...serializedDisplay,
+            assignedPlaylist: serializedPlaylist,
+            refresh: true,
+          });
+        }
+      }
+    } catch (broadcastError) {
+      console.error('Error broadcasting playlist changes:', broadcastError);
+    }
 
     return NextResponse.json(apiResponse);
   } catch (error) {

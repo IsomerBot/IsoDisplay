@@ -15,7 +15,7 @@ export function useCSRF() {
       setCSRFToken(token);
     } else {
       // Fetch CSRF token from server
-      fetch('/api/auth/csrf')
+      fetch('/api/auth/csrf', { credentials: 'same-origin' })
         .then(res => res.json())
         .then(data => {
           if (data.csrfToken) {
