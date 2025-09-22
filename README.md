@@ -23,11 +23,16 @@ IsoDisplay is a Docker-first digital signage platform. Upload media, arrange pla
 
 2. **Launch the stack**
 
-   Edit `docker-compose.yml` so the `app` service points at the image published to GHCR (for example `ghcr.io/your-org/isodisplay:v1.0.0`). Then start the services and run migrations/seed:
+   Edit `docker-compose.yml` so the `app` service points at the image published to GHCR (for example `ghcr.io/your-org/isodisplay:v1.0.0`). Then start the services:
 
    ```bash
    docker compose pull
    docker compose up -d
+   ```
+
+   The container automatically runs pending Prisma migrations and seeds the administrator account on startup. If you ever need to reapply them manually, run:
+
+   ```bash
    docker compose exec app npx prisma migrate deploy
    docker compose exec app npx prisma db seed
    ```
@@ -50,7 +55,7 @@ services:
     volumes:
       - ./data/postgres/db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-isodisplay}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-isodisplay} -d ${POSTGRES_DB:-isodisplay}"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -14,7 +14,7 @@ services:
     networks:
       - isodisplay-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-isodisplay}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-isodisplay} -d ${POSTGRES_DB:-isodisplay}"]
       interval: 10s
       timeout: 5s
       retries: 5

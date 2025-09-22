@@ -21,3 +21,5 @@ yarn-debug.log*
 # Build artifacts
 *.tsbuildinfo
 
+# Misc
+.DS_Store
