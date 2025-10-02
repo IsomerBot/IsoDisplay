@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Display } from '@/types/display';
 import { Playlist, PlaylistItem } from '@/types/playlist';
 import TransitionContainer from './TransitionContainer';
-import { ImageRenderer } from './renderers/ImageRenderer';
+import { OptimizedImageRenderer } from './renderers/OptimizedImageRenderer';
 import { VideoRenderer } from './renderers/VideoRenderer';
 import VerticalVideoRenderer from './renderers/VerticalVideoRenderer';
 import { PDFRenderer } from './renderers/PDFRenderer';
@@ -13,6 +13,8 @@ import { useFullscreen } from '@/hooks/useFullscreen';
 import { useDisplayWebSocket } from '@/hooks/useWebSocket';
 import { usePerformanceOptimization } from '@/lib/performance';
 import { playlistCache } from '@/lib/services/playlist-cache';
+import { useImagePreloader } from '@/hooks/useImagePreloader';
+import { getPreloadConfig } from './config/preload-config';
 import type {
   PlaylistUpdateMessage,
   DisplayControlMessage,
@@ -57,6 +59,16 @@ export function DisplayPlayer({ display, playlist: initialPlaylist, onConnection
 
   // Performance optimization for Raspberry Pi
   const { metrics, quality, optimizer } = usePerformanceOptimization();
+
+  // Get preload configuration
+  const preloadConfig = getPreloadConfig({ isRaspberryPi: display.isRaspberryPi });
+
+  // Preload upcoming images to prevent loading text on Pi
+  useImagePreloader(playlist.items, currentIndex, {
+    enabled: preloadConfig.enabled,
+    preloadCount: preloadConfig.preloadCount,
+    cacheSize: preloadConfig.cacheSize
+  });
 
   // Initialize WebSocket connection
   const {
@@ -407,7 +419,7 @@ export function DisplayPlayer({ display, playlist: initialPlaylist, onConnection
 
     switch (contentType) {
       case 'image':
-        return <ImageRenderer item={item} />;
+        return <OptimizedImageRenderer item={item} displaySettings={{ isRaspberryPi: display.isRaspberryPi }} />;
       case 'video':
         return <VerticalVideoRenderer item={item} isPlaying={isPlaying} onEnded={moveToNextItem} />;
       case 'pdf':
@@ -433,6 +445,7 @@ export function DisplayPlayer({ display, playlist: initialPlaylist, onConnection
         transition={currentItem?.transition || 'fade'}
         duration={currentItem?.transitionDuration || 1}
         contentKey={currentIndex}
+        displaySettings={{ isRaspberryPi: display.isRaspberryPi }}
       >
         {renderContent(currentItem)}
       </TransitionContainer>

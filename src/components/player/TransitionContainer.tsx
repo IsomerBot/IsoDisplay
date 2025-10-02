@@ -3,6 +3,7 @@
 import { ReactNode, memo, useRef, useEffect, useState } from 'react';
 import { CSSTransition, SwitchTransition } from 'react-transition-group';
 import { TransitionEffect } from '@/types/playlist';
+import { isLowPowerDevice } from '@/lib/device-detection';
 import '@/styles/transitions.css';
 
 interface TransitionContainerProps {
@@ -10,6 +11,7 @@ interface TransitionContainerProps {
   transition: TransitionEffect;
   duration: number;
   contentKey: string | number;
+  displaySettings?: { isRaspberryPi?: boolean };
 }
 
 export const TransitionContainer = memo(function TransitionContainer({
@@ -17,6 +19,7 @@ export const TransitionContainer = memo(function TransitionContainer({
   transition,
   duration,
   contentKey,
+  displaySettings,
 }: TransitionContainerProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isLowPowerDevice, setIsLowPowerDevice] = useState(false);
@@ -24,27 +27,8 @@ export const TransitionContainer = memo(function TransitionContainer({
   const [optimizedDuration, setOptimizedDuration] = useState(duration);
 
   useEffect(() => {
-    // Check for forced performance mode via URL parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const forcePerformanceMode = urlParams.get('performance') === 'low';
-
-    // Detect Raspberry Pi or low-powered device
-    const userAgent = navigator.userAgent.toLowerCase();
-    const isRaspberryPi = userAgent.includes('raspbian') ||
-                          userAgent.includes('armv') ||
-                          userAgent.includes('aarch64') ||
-                          userAgent.includes('raspberry');
-
-    // Check for reduced motion preference
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    // Check for low memory (less than 2GB)
-    const lowMemory = (navigator as any).deviceMemory && (navigator as any).deviceMemory <= 2;
-
-    // Check for low core count
-    const lowCores = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4;
-
-    const isLowPower = forcePerformanceMode || isRaspberryPi || prefersReducedMotion || lowMemory || lowCores;
+    // Use the device detection utility with display settings
+    const isLowPower = isLowPowerDevice(displaySettings);
     setIsLowPowerDevice(isLowPower);
 
     if (isLowPower) {

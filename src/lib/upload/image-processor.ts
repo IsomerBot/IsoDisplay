@@ -2,6 +2,9 @@ import sharp from 'sharp';
 import path from 'path';
 import { promises as fs } from 'fs';
 
+// Note: Sharp's .rotate() method automatically rotates images based on EXIF orientation
+// This ensures photos from phones/cameras display correctly regardless of how they were taken
+
 // Image processing options
 export interface ImageProcessingOptions {
   quality?: number;
@@ -35,8 +38,8 @@ export async function processImage(
     preserveMetadata = false,
   } = options;
 
-  // Get image metadata
-  const image = sharp(inputPath);
+  // Get image metadata and auto-rotate based on EXIF orientation
+  const image = sharp(inputPath).rotate(); // This auto-rotates based on EXIF orientation
   const metadata = await image.metadata();
 
   // Ensure output directory exists (outputDir is already absolute)
@@ -54,6 +57,7 @@ export async function processImage(
     const outputPath = path.join(outputDir, outputFileName);
 
     let pipeline = sharp(inputPath)
+      .rotate() // Auto-rotate based on EXIF orientation
       .resize(dimensions.width, dimensions.height, {
         fit: 'inside',
         withoutEnlargement: true,
@@ -80,9 +84,15 @@ export async function processImage(
         break;
     }
 
-    // Remove metadata if not preserving
+    // Handle metadata - always remove orientation tag after rotation
     if (!preserveMetadata) {
-      pipeline = pipeline.withMetadata();
+      pipeline = pipeline.withMetadata({
+        orientation: undefined // Remove orientation after rotating
+      });
+    } else {
+      pipeline = pipeline.withMetadata({
+        orientation: undefined // Remove orientation to prevent double rotation
+      });
     }
 
     await pipeline.toFile(outputPath);
@@ -93,7 +103,7 @@ export async function processImage(
   const originalOutputName = `${baseName}-original.${format}`;
   const originalOutputPath = path.join(outputDir, originalOutputName);
   
-  let originalPipeline = sharp(inputPath);
+  let originalPipeline = sharp(inputPath).rotate(); // Auto-rotate based on EXIF
   
   // Only resize if larger than large size
   if (metadata.width && metadata.width > THUMBNAIL_SIZES.large.width) {
@@ -133,11 +143,13 @@ export async function convertHeicToJpeg(
   outputPath?: string
 ): Promise<string> {
   const output = outputPath || inputPath.replace(/\.(heic|heif)$/i, '.jpg');
-  
+
   await sharp(inputPath)
+    .rotate() // Auto-rotate based on EXIF orientation
     .jpeg({ quality: 90, progressive: true })
+    .withMetadata({ orientation: undefined }) // Remove orientation after rotating
     .toFile(output);
-  
+
   return output;
 }
 
@@ -152,18 +164,20 @@ export async function extractImageMetadata(imagePath: string): Promise<{
   orientation?: number;
   exif?: Record<string, any>;
 }> {
-  const metadata = await sharp(imagePath).metadata();
+  // Get metadata after auto-rotation to get correct dimensions
+  const metadata = await sharp(imagePath).rotate().metadata();
+  const originalMetadata = await sharp(imagePath).metadata(); // Get original for EXIF
   const stats = await fs.stat(imagePath);
-  
+
   return {
-    width: metadata.width,
-    height: metadata.height,
+    width: metadata.width, // Width after rotation
+    height: metadata.height, // Height after rotation
     format: metadata.format,
     size: stats.size,
     density: metadata.density,
     hasAlpha: metadata.hasAlpha,
-    orientation: metadata.orientation,
-    exif: metadata.exif as Record<string, any>,
+    orientation: originalMetadata.orientation, // Original orientation value
+    exif: originalMetadata.exif as Record<string, any>,
   };
 }
 
@@ -177,6 +191,7 @@ export async function generatePreviewWithBackground(
   const metadata = await sharp(inputPath).metadata();
   
   let pipeline = sharp(inputPath)
+    .rotate() // Auto-rotate based on EXIF orientation
     .resize(1200, 1200, {
       fit: 'inside',
       withoutEnlargement: true,
@@ -211,6 +226,7 @@ export async function createImageSprite(
   const tiles = await Promise.all(
     imagePaths.map(async (imagePath) => {
       const buffer = await sharp(imagePath)
+        .rotate() // Auto-rotate based on EXIF orientation
         .resize(tileWidth, tileHeight, { fit: 'cover' })
         .toBuffer();
       return buffer;
@@ -245,7 +261,8 @@ export async function validateImageForDisplay(
   maxWidth: number = 3840,
   maxHeight: number = 2160
 ): Promise<{ valid: boolean; message?: string }> {
-  const metadata = await sharp(imagePath).metadata();
+  // Check dimensions after auto-rotation
+  const metadata = await sharp(imagePath).rotate().metadata();
   
   if (!metadata.width || !metadata.height) {
     return { valid: false, message: 'Could not determine image dimensions' };
@@ -388,8 +405,8 @@ export async function generateDisplayThumbnail(
       }
     });
     
-    // Get the input image metadata to calculate proper sizing
-    const metadata = await sharp(inputPath).metadata();
+    // Get the input image metadata to calculate proper sizing (after rotation)
+    const metadata = await sharp(inputPath).rotate().metadata();
     const inputWidth = metadata.width || 640;
     const inputHeight = metadata.height || 360;
     
@@ -398,6 +415,7 @@ export async function generateDisplayThumbnail(
     if (imageScale === 'cover') {
       // Cover: scale image to cover entire canvas, crop if necessary
       resizedImage = await sharp(inputPath)
+        .rotate() // Auto-rotate based on EXIF orientation
         .resize(640, 360, {
           fit: 'cover',
           position: 'center'
@@ -406,6 +424,7 @@ export async function generateDisplayThumbnail(
     } else if (imageScale === 'fill') {
       // Fill: stretch image to fill entire canvas (may distort aspect ratio)
       resizedImage = await sharp(inputPath)
+        .rotate() // Auto-rotate based on EXIF orientation
         .resize(640, 360, {
           fit: 'fill'
         })
@@ -438,6 +457,7 @@ export async function generateDisplayThumbnail(
       }
       
       resizedImage = await sharp(inputPath)
+        .rotate() // Auto-rotate based on EXIF orientation
         .resize(targetWidth, targetHeight, {
           fit: 'fill',
           withoutEnlargement: true
@@ -467,6 +487,7 @@ export async function generateDisplayThumbnail(
     })
       .composite([{
         input: await sharp(inputPath)
+          .rotate() // Auto-rotate based on EXIF orientation
           .resize(640, 360, {
             fit: 'inside',
             withoutEnlargement: true
