@@ -53,6 +53,8 @@ export function DisplayModal({ display, isOpen, onClose, onSave }: DisplayModalP
 
   useEffect(() => {
     if (display) {
+      console.log('[DisplayModal] Received display for editing:', display);
+      console.log('[DisplayModal] display.isRaspberryPi:', display.isRaspberryPi);
       setFormData({
         name: display.name,
         location: display.location || '',
@@ -150,6 +152,9 @@ export function DisplayModal({ display, isOpen, onClose, onSave }: DisplayModalP
         assignedPlaylistId: assignedPlaylistId || null,
         clockSettings: clockSettings,
       };
+
+      console.log('[DisplayModal] Sending to API:', JSON.stringify(body, null, 2));
+      console.log('[DisplayModal] formData.isRaspberryPi:', formData.isRaspberryPi);
 
       const response = await secureFetch(url, {
         method,

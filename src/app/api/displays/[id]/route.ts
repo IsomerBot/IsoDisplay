@@ -79,16 +79,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
     
     const body = await request.json();
-    
+    console.log('[API PUT /displays/[id]] Received body:', JSON.stringify(body, null, 2));
+
     // Validate request body
     const validation = validateUpdateDisplay(body);
     if (!validation.success) {
+      console.log('[API PUT /displays/[id]] Validation failed:', validation.error);
       return validationErrorResponse(validation.error);
     }
-    
+
     const validatedData = validation.data as UpdateDisplayInput;
+    console.log('[API PUT /displays/[id]] Validated data:', JSON.stringify(validatedData, null, 2));
 
     const display = await displayService.updateDisplay(id, validatedData);
+    console.log('[API PUT /displays/[id]] Display after update - isRaspberryPi:', display?.isRaspberryPi);
 
     if (!display) {
       return NextResponse.json({ error: 'Display not found' }, { status: 404 });
