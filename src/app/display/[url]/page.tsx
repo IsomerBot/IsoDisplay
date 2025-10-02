@@ -60,6 +60,70 @@ export default function DisplayViewerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [playerConnectionStatus, setPlayerConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
+
+  // Define fetchDisplay before using it in callbacks
+  const fetchDisplay = useCallback(async (isPolling = false) => {
+    try {
+      const response = await fetch(`/api/display/${uniqueUrl}`, {
+        cache: 'no-cache',  // Force fresh data
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Display not found');
+      }
+      const data = await response.json();
+
+      // Only log and check for changes during polling
+      if (isPolling) {
+        console.log('Polling - Fetched display data:', data);
+        console.log('Current playlist ID:', playlist?.id);
+        console.log('New playlist ID:', data.assignedPlaylist?.id);
+
+        // Don't reload the page when setting to null - let React handle the transition
+        // The page reload was causing the error boundary issues
+
+        // Check if playlist has actually changed (but not to/from null)
+        const playlistChanged =
+          data.assignedPlaylist && playlist && (
+            (playlist?.id !== data.assignedPlaylist?.id) ||
+            (playlist?.items?.length !== data.assignedPlaylist?.items?.length)
+          );
+
+        if (playlistChanged) {
+          console.log('Playlist changed detected, reloading page...');
+          // Clear any cached data
+          localStorage.removeItem(`isodisplay_playlist_${display?.id}`);
+          // Force a full page reload
+          setTimeout(() => window.location.reload(), 100);
+          return;
+        }
+      }
+
+      // Normal update without reload
+      setDisplay(data);
+
+      if (data.assignedPlaylist) {
+        setPlaylist(data.assignedPlaylist);
+        setError(null);
+      } else {
+        setPlaylist(null);
+        // Only set error if no display found
+        if (!data) {
+          setError('No content available');
+        } else {
+          setError(null);
+        }
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching display:', err);
+      setError('Failed to load display');
+      setLoading(false);
+    }
+  }, [uniqueUrl, playlist, display?.id]);
+
   // Handle remote commands
   const handleRemoteCommand = useCallback((command: any) => {
     switch (command.action) {
@@ -77,7 +141,7 @@ export default function DisplayViewerPage() {
         }
         break;
     }
-  }, []);
+  }, [fetchDisplay]);
 
   // Initialize Socket.io connection
   // Always keep WebSocket connected even if display is null, so we can receive updates
@@ -171,69 +235,7 @@ export default function DisplayViewerPage() {
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [uniqueUrl]);
-
-  const fetchDisplay = async (isPolling = false) => {
-    try {
-      const response = await fetch(`/api/display/${uniqueUrl}`, {
-        cache: 'no-cache',  // Force fresh data
-        headers: {
-          'Cache-Control': 'no-cache',
-        },
-      });
-      if (!response.ok) {
-        throw new Error('Display not found');
-      }
-      const data = await response.json();
-      
-      // Only log and check for changes during polling
-      if (isPolling) {
-        console.log('Polling - Fetched display data:', data);
-        console.log('Current playlist ID:', playlist?.id);
-        console.log('New playlist ID:', data.assignedPlaylist?.id);
-        
-        // Don't reload the page when setting to null - let React handle the transition
-        // The page reload was causing the error boundary issues
-        
-        // Check if playlist has actually changed (but not to/from null)
-        const playlistChanged = 
-          data.assignedPlaylist && playlist && (
-            (playlist?.id !== data.assignedPlaylist?.id) ||
-            (playlist?.items?.length !== data.assignedPlaylist?.items?.length)
-          );
-        
-        if (playlistChanged) {
-          console.log('Playlist changed detected, reloading page...');
-          // Clear any cached data
-          localStorage.removeItem(`isodisplay_playlist_${display?.id}`);
-          // Force a full page reload
-          setTimeout(() => window.location.reload(), 100);
-          return;
-        }
-      }
-      
-      // Normal update without reload
-      setDisplay(data);
-      
-      if (data.assignedPlaylist) {
-        setPlaylist(data.assignedPlaylist);
-        setError(null);
-      } else {
-        setPlaylist(null);
-        // Don't set error for missing playlist - let the UI show "no content" message
-        setError(null);
-      }
-    } catch (err) {
-      console.error('Error fetching display:', err);
-      if (!isPolling) {
-        setError(err instanceof Error ? err.message : 'Failed to load display');
-      }
-    } finally {
-      if (!isPolling) {
-        setLoading(false);
-      }
-    }
-  };
+  }, [uniqueUrl, fetchDisplay]);
 
 
   if (loading) {
@@ -253,7 +255,7 @@ export default function DisplayViewerPage() {
         type="network-error"
         message={error}
         displayName={uniqueUrl}
-        onRetry={fetchDisplay}
+        onRetry={() => fetchDisplay(false)}
         showRetryButton={true}
         isConnected={isDisplayConnected}
       />
