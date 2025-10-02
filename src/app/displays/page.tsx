@@ -64,18 +64,9 @@ export default function DisplaysPage() {
       });
       if (response.ok) {
         const data = await response.json();
-        console.log('Raw API response:', data);
-        console.log('First display in response:', data[0]);
-        if (data[0]) {
-          console.log('First display isRaspberryPi:', data[0].isRaspberryPi);
-        }
-
         // The API already returns frontend Display format from displayService
         // No need to transform again
         const displays = Array.isArray(data) ? data : [];
-        
-        console.log('Using displays directly:', displays);
-        console.log('First display uniqueUrl:', displays[0]?.uniqueUrl);
         
         setDisplays(displays);
       }
