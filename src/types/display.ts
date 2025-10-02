@@ -18,6 +18,7 @@ export interface Display {
   isActive: boolean;
   settings?: DisplaySettings;
   clockSettings?: any; // JSON clock configuration
+  isRaspberryPi?: boolean;
 }
 
 export type Resolution = '1920x1080' | '1080x1920' | '3840x2160' | '2160x3840' | 'custom';
@@ -45,6 +46,7 @@ export interface CreateDisplayInput {
   orientation?: Orientation;
   assignedPlaylistId?: string;
   clockSettings?: any;
+  isRaspberryPi?: boolean;
 }
 
 export interface UpdateDisplayInput {
@@ -54,6 +56,7 @@ export interface UpdateDisplayInput {
   orientation?: Orientation;
   assignedPlaylistId?: string | null;
   clockSettings?: any;
+  isRaspberryPi?: boolean;
 }
 
 export const RESOLUTION_OPTIONS = [

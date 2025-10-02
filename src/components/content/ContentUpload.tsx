@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Upload, X, File, AlertCircle } from 'lucide-react';
 import { useCSRF } from '@/hooks/useCSRF';
 import { getCSRFHeaders } from '@/lib/security/csrf';
+import { ImagePreview } from './ImagePreview';
 
 interface ContentUploadProps {
   onClose: () => void;
@@ -193,29 +194,60 @@ export function ContentUpload({ onClose, onSuccess }: ContentUploadProps) {
 
         {/* Upload Area */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div
-            className="border-2 border-dashed border-white/10 rounded-lg p-8 text-center hover:border-brand-orange-500/50 transition cursor-pointer"
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="w-12 h-12 text-white/50 mx-auto mb-4" />
-            <p className="text-white mb-2">Drop files here or click to browse</p>
-            <p className="text-white/50 text-sm">
-              Supported: Images, Videos, PDFs, PowerPoint
-            </p>
-            <p className="text-white/50 text-sm mt-1">
-              Max file size: 500MB
-            </p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={acceptedTypes}
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-          </div>
+          {/* Show preview if any image files are selected, otherwise show dropzone */}
+          {files.some(f => f.type.startsWith('image/')) ? (
+            <div className="space-y-4">
+              {/* Image Preview - Show first image file */}
+              <ImagePreview
+                file={files.find(f => f.type.startsWith('image/')) || null}
+                backgroundColor={backgroundColor}
+                imageScale={imageScale}
+                imageSize={imageSize}
+              />
+
+              {/* Add more files button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-white transition-all flex items-center justify-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                <span>Add More Files</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={acceptedTypes}
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+          ) : (
+            <div
+              className="border-2 border-dashed border-white/10 rounded-lg p-8 text-center hover:border-brand-orange-500/50 transition cursor-pointer"
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="w-12 h-12 text-white/50 mx-auto mb-4" />
+              <p className="text-white mb-2">Drop files here or click to browse</p>
+              <p className="text-white/50 text-sm">
+                Supported: Images, Videos, PDFs, PowerPoint
+              </p>
+              <p className="text-white/50 text-sm mt-1">
+                Max file size: 500MB
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept={acceptedTypes}
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+          )}
 
           {/* File List */}
           {files.length > 0 && (

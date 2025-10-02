@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ContentType } from '@/generated/prisma';
 import { useCSRF } from '@/hooks/useCSRF';
+import { ContentImagePreview } from './ContentImagePreview';
 
 interface ContentItem {
   id: string;
@@ -19,6 +20,11 @@ interface ContentItem {
   backgroundColor?: string | null;
   url?: string | null;
   filePath?: string | null;
+  fileUrl?: string | null;
+  thumbnails?: Array<{
+    size: string;
+    url: string;
+  }>;
 }
 
 interface ContentEditModalProps {
@@ -276,6 +282,18 @@ export function ContentEditModal({ content, onClose, onSuccess }: ContentEditMod
           {/* Image Display Settings */}
           {content.type.toUpperCase() === ContentType.IMAGE && (
             <>
+              {/* Image Preview */}
+              <div className="mb-4">
+                <ContentImagePreview
+                  contentUrl={content.fileUrl || content.filePath ||
+                    content.thumbnails?.find(t => t.size === 'large')?.url ||
+                    content.thumbnails?.[0]?.url || ''}
+                  backgroundColor={formData.backgroundColor}
+                  imageScale={formData.imageScale as 'contain' | 'cover' | 'fill'}
+                  imageSize={formData.imageSize}
+                />
+              </div>
+
               {/* Background Color Picker */}
               <div>
                 <Label className="text-white/70 text-sm">Background Color</Label>

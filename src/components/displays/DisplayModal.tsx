@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { FilterableSelect } from '@/components/ui/filterable-select';
 import { Display, CreateDisplayInput, UpdateDisplayInput, RESOLUTION_OPTIONS } from '@/types/display';
@@ -29,6 +30,7 @@ export function DisplayModal({ display, isOpen, onClose, onSave }: DisplayModalP
     location: '',
     resolution: '1920x1080',
     orientation: 'LANDSCAPE',
+    isRaspberryPi: false,
   });
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [assignedPlaylistId, setAssignedPlaylistId] = useState<string>('');
@@ -56,6 +58,7 @@ export function DisplayModal({ display, isOpen, onClose, onSave }: DisplayModalP
         location: display.location || '',
         resolution: display.resolution,
         orientation: display.orientation,
+        isRaspberryPi: display.isRaspberryPi || false,
       });
       setAssignedPlaylistId(display.assignedPlaylistId || '');
       
@@ -72,6 +75,7 @@ export function DisplayModal({ display, isOpen, onClose, onSave }: DisplayModalP
         location: '',
         resolution: '1920x1080',
         orientation: 'LANDSCAPE',
+        isRaspberryPi: false,
       });
       setAssignedPlaylistId('');
       setClockSettings({
@@ -257,6 +261,23 @@ export function DisplayModal({ display, isOpen, onClose, onSave }: DisplayModalP
                     emptyMessage="No orientations found."
                   />
                 </div>
+              </div>
+
+              {/* Raspberry Pi Device Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="isRaspberryPi" className="text-white">
+                    Raspberry Pi Display
+                  </Label>
+                  <p className="text-sm text-gray-400">
+                    Enable optimizations for Raspberry Pi hardware
+                  </p>
+                </div>
+                <Switch
+                  id="isRaspberryPi"
+                  checked={formData.isRaspberryPi || false}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isRaspberryPi: checked })}
+                />
               </div>
 
               {/* Assigned Playlist */}
