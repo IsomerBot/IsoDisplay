@@ -366,6 +366,7 @@ class DisplayService {
       isActive: true,  // Always true since we don't have soft delete
       settings: {},  // No settings field in schema
       clockSettings: display.clockSettings || {},
+      isRaspberryPi: display.isRaspberryPi || false,
     };
   }
 }
