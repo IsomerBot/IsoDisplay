@@ -73,7 +73,18 @@ class DisplayService {
       },
     });
 
-    return displays.map(d => this.formatDisplay(d));
+    console.log('[DisplayService.getAllDisplays] Raw displays from DB:');
+    displays.forEach(d => {
+      console.log(`  - ${d.name}: isRaspberryPi = ${d.isRaspberryPi}`);
+    });
+
+    const formatted = displays.map(d => this.formatDisplay(d));
+    console.log('[DisplayService.getAllDisplays] Formatted displays:');
+    formatted.forEach(d => {
+      console.log(`  - ${d.name}: isRaspberryPi = ${d.isRaspberryPi}`);
+    });
+
+    return formatted;
   }
 
   // Get single display
@@ -179,7 +190,14 @@ class DisplayService {
     }
 
     try {
-      console.log('[DisplayService.updateDisplay] Update data being sent to Prisma:', updateData);
+      console.log('[DisplayService.updateDisplay] Update data being sent to Prisma:', JSON.stringify(updateData, null, 2));
+
+      // First, let's check what's currently in the database
+      const beforeUpdate = await prisma.display.findUnique({
+        where: { id: displayId },
+        select: { id: true, name: true, isRaspberryPi: true }
+      });
+      console.log('[DisplayService.updateDisplay] Display BEFORE update:', beforeUpdate);
 
       const display = await prisma.display.update({
         where: { id: displayId },
@@ -205,6 +223,13 @@ class DisplayService {
         name: display.name,
         isRaspberryPi: display.isRaspberryPi
       });
+
+      // Double-check by querying again
+      const verification = await prisma.display.findUnique({
+        where: { id: displayId },
+        select: { id: true, name: true, isRaspberryPi: true }
+      });
+      console.log('[DisplayService.updateDisplay] Verification query after update:', verification);
 
       const formatted = this.formatDisplay(display);
       console.log('[DisplayService.updateDisplay] Formatted display isRaspberryPi:', formatted.isRaspberryPi);
