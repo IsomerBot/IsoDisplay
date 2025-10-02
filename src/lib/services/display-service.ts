@@ -154,6 +154,8 @@ class DisplayService {
 
   // Update display
   async updateDisplay(displayId: string, input: UpdateDisplayInput): Promise<Display | null> {
+    console.log('[DisplayService.updateDisplay] Input:', JSON.stringify(input, null, 2));
+
     // Build update data object with only defined values
     const updateData: any = {
       updatedAt: new Date(),
@@ -165,7 +167,10 @@ class DisplayService {
     if (input.resolution !== undefined) updateData.resolution = input.resolution;
     if (input.orientation !== undefined) updateData.orientation = input.orientation as DisplayOrientation;
     if (input.assignedPlaylistId !== undefined) updateData.playlistId = input.assignedPlaylistId;
-    if (input.isRaspberryPi !== undefined) updateData.isRaspberryPi = input.isRaspberryPi;
+    if (input.isRaspberryPi !== undefined) {
+      console.log('[DisplayService.updateDisplay] Setting isRaspberryPi to:', input.isRaspberryPi);
+      updateData.isRaspberryPi = input.isRaspberryPi;
+    }
     
     // Handle clockSettings - ensure it's a valid JSON object
     if (input.clockSettings !== undefined) {
@@ -174,6 +179,8 @@ class DisplayService {
     }
 
     try {
+      console.log('[DisplayService.updateDisplay] Update data being sent to Prisma:', updateData);
+
       const display = await prisma.display.update({
         where: { id: displayId },
         data: updateData,
@@ -193,7 +200,15 @@ class DisplayService {
         },
       });
 
-      return this.formatDisplay(display);
+      console.log('[DisplayService.updateDisplay] Raw display from DB after update:', {
+        id: display.id,
+        name: display.name,
+        isRaspberryPi: display.isRaspberryPi
+      });
+
+      const formatted = this.formatDisplay(display);
+      console.log('[DisplayService.updateDisplay] Formatted display isRaspberryPi:', formatted.isRaspberryPi);
+      return formatted;
     } catch (error) {
       console.error('DisplayService.updateDisplay - Prisma error:', error);
       throw error;
@@ -302,6 +317,8 @@ class DisplayService {
 
   // Format display from Prisma to application type
   private formatDisplay(display: any): Display {
+    console.log('[DisplayService.formatDisplay] Input display.isRaspberryPi:', display.isRaspberryPi);
+
     // Determine status based on isOnline and lastSeen
     let status: DisplayStatus = 'unknown';
     if (display.isOnline) {
@@ -346,7 +363,7 @@ class DisplayService {
       };
     }
 
-    return {
+    const result = {
       id: display.id,
       name: display.name,
       description: '',  // No description field in schema
@@ -368,6 +385,9 @@ class DisplayService {
       clockSettings: display.clockSettings || {},
       isRaspberryPi: display.isRaspberryPi || false,
     };
+
+    console.log('[DisplayService.formatDisplay] Returning display with isRaspberryPi:', result.isRaspberryPi);
+    return result;
   }
 }
 
