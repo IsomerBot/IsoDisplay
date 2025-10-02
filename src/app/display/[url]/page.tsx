@@ -6,9 +6,51 @@ import DisplayPlayer from '@/components/player/DisplayPlayer';
 import PlayerErrorBoundary from '@/components/player/PlayerErrorBoundary';
 import { FallbackContent } from '@/components/player/FallbackContent';
 import { ClockOverlay } from '@/components/player/ClockOverlay';
+import type { ClockConfig } from '@/components/displays/ClockSettings';
 import { Display } from '@/types/display';
 import { Playlist } from '@/types/playlist';
 import { useSocketConnection } from '@/hooks/useSocketConnection';
+
+// Default clock settings to use if invalid or missing
+const DEFAULT_CLOCK_SETTINGS: ClockConfig = {
+  enabled: false,
+  position: 'top-right',
+  size: 'medium',
+  format: '12h',
+  showSeconds: true,
+  showDate: false,
+  opacity: 80,
+  color: '#FFFFFF',
+  backgroundColor: '#000000',
+  fontFamily: 'digital',
+  offsetX: 20,
+  offsetY: 20,
+};
+
+// Helper function to validate and normalize clock settings
+const getValidClockSettings = (settings: any): ClockConfig | null => {
+  if (!settings || typeof settings !== 'object') {
+    return null;
+  }
+
+  // Ensure all required properties exist
+  const validSettings: ClockConfig = {
+    enabled: settings.enabled === true,
+    position: settings.position || DEFAULT_CLOCK_SETTINGS.position,
+    size: settings.size || DEFAULT_CLOCK_SETTINGS.size,
+    format: settings.format || DEFAULT_CLOCK_SETTINGS.format,
+    showSeconds: settings.showSeconds !== false,
+    showDate: settings.showDate === true,
+    opacity: typeof settings.opacity === 'number' ? settings.opacity : DEFAULT_CLOCK_SETTINGS.opacity,
+    color: settings.color || DEFAULT_CLOCK_SETTINGS.color,
+    backgroundColor: settings.backgroundColor || DEFAULT_CLOCK_SETTINGS.backgroundColor,
+    fontFamily: settings.fontFamily || DEFAULT_CLOCK_SETTINGS.fontFamily,
+    offsetX: typeof settings.offsetX === 'number' ? settings.offsetX : DEFAULT_CLOCK_SETTINGS.offsetX,
+    offsetY: typeof settings.offsetY === 'number' ? settings.offsetY : DEFAULT_CLOCK_SETTINGS.offsetY,
+  };
+
+  return validSettings.enabled ? validSettings : null;
+};
 
 export default function DisplayViewerPage() {
   const params = useParams();
@@ -246,9 +288,10 @@ export default function DisplayViewerPage() {
         />
         
         {/* Clock Overlay */}
-        {display.clockSettings && (
-          <ClockOverlay settings={display.clockSettings} />
-        )}
+        {(() => {
+          const validClockSettings = getValidClockSettings(display.clockSettings);
+          return validClockSettings ? <ClockOverlay settings={validClockSettings} /> : null;
+        })()}
         
       </div>
     </PlayerErrorBoundary>
