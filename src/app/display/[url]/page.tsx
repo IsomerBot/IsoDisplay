@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import DisplayPlayer from '@/components/player/DisplayPlayer';
 import PlayerErrorBoundary from '@/components/player/PlayerErrorBoundary';
@@ -61,11 +61,8 @@ export default function DisplayViewerPage() {
   const [error, setError] = useState<string | null>(null);
   const [playerConnectionStatus, setPlayerConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
 
-  // Create a stable reference for fetchDisplay that doesn't depend on state
-  const fetchDisplayRef = useRef<(isPolling?: boolean) => Promise<void>>();
-
-  // Define fetchDisplay as a regular function that updates the ref
-  fetchDisplayRef.current = async (isPolling = false) => {
+  // Use useCallback with proper dependencies for stable function reference
+  const fetchDisplay = useCallback(async (isPolling = false) => {
     try {
       const response = await fetch(`/api/display/${uniqueUrl}`, {
         cache: 'no-cache',  // Force fresh data
@@ -125,18 +122,16 @@ export default function DisplayViewerPage() {
       setError('Failed to load display');
       setLoading(false);
     }
-  };
+  }, [uniqueUrl, display?.id, playlist?.id, playlist?.items?.length]);
 
-  // Handle remote commands with stable function reference
-  const handleRemoteCommand = (command: any) => {
+  // Handle remote commands with useCallback
+  const handleRemoteCommand = useCallback((command: any) => {
     switch (command.action) {
       case 'reload':
         window.location.reload();
         break;
       case 'refresh_content':
-        if (fetchDisplayRef.current) {
-          fetchDisplayRef.current();
-        }
+        fetchDisplay();
         break;
       case 'clear_cache':
         if ('caches' in window) {
@@ -146,7 +141,7 @@ export default function DisplayViewerPage() {
         }
         break;
     }
-  };
+  }, [fetchDisplay]);
 
   // Initialize Socket.io connection
   // Always keep WebSocket connected even if display is null, so we can receive updates
@@ -205,8 +200,8 @@ export default function DisplayViewerPage() {
       }
     },
     onContentUpdate: (content) => {
-      if (content.refresh && fetchDisplayRef.current) {
-        fetchDisplayRef.current();
+      if (content.refresh) {
+        fetchDisplay();
       }
     },
     onCommand: handleRemoteCommand,
@@ -232,19 +227,15 @@ export default function DisplayViewerPage() {
     if (!uniqueUrl) return;
 
     // Initial fetch
-    if (fetchDisplayRef.current) {
-      fetchDisplayRef.current(false);
-    }
+    fetchDisplay(false);
 
     // Safety net polling in case websocket updates fail
     const interval = setInterval(() => {
-      if (fetchDisplayRef.current) {
-        fetchDisplayRef.current(true);
-      }
+      fetchDisplay(true);
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [uniqueUrl]);
+  }, [uniqueUrl, fetchDisplay]);
 
 
   if (loading) {
@@ -264,7 +255,7 @@ export default function DisplayViewerPage() {
         type="network-error"
         message={error}
         displayName={uniqueUrl}
-        onRetry={() => fetchDisplayRef.current && fetchDisplayRef.current(false)}
+        onRetry={() => fetchDisplay(false)}
         showRetryButton={true}
         isConnected={isDisplayConnected}
       />
@@ -299,10 +290,9 @@ export default function DisplayViewerPage() {
         />
         
         {/* Clock Overlay */}
-        {(() => {
-          const validClockSettings = getValidClockSettings(display.clockSettings);
-          return validClockSettings ? <ClockOverlay settings={validClockSettings} /> : null;
-        })()}
+        {display.clockSettings && getValidClockSettings(display.clockSettings) && (
+          <ClockOverlay settings={getValidClockSettings(display.clockSettings)!} />
+        )}
         
       </div>
     </PlayerErrorBoundary>
