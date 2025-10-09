@@ -56,12 +56,19 @@ export const TransitionContainer = memo(function TransitionContainer({
   }, []);
 
   const transitionClassNames = `transition-${optimizedTransition}`;
-  const timeout = optimizedDuration * 1000;
+  const enterDuration = optimizedDuration;
+  const exitDuration = Math.min(optimizedDuration, 0.3);
+  const timeout = {
+    enter: enterDuration * 1000,
+    exit: exitDuration * 1000,
+  } as const;
   const nodeRef = getNodeRef(contentKey);
 
   // Set CSS variable for transition duration
   const style: CSSProperties = {
-    '--transition-duration': `${optimizedDuration}s`,
+    '--transition-duration': `${enterDuration}s`,
+    '--transition-enter-duration': `${enterDuration}s`,
+    '--transition-exit-duration': `${exitDuration}s`,
   };
 
   // For instant transitions (cut), just render without animation
